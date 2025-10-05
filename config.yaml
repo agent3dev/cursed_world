@@ -1,0 +1,6 @@
+terrain:
+  ratios:
+    empty: 98
+    seedlings: 2
+    dead_trees: 3
+    rocks: 1

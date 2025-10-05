@@ -1,0 +1,19 @@
+# Compiled binaries
+cursed_world
+*.o
+
+# Build artifacts
+*.exe
+*.out
+*.app
+
+# IDE/Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
