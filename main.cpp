@@ -4,17 +4,45 @@
 #include <random>
 #include <chrono>
 #include <map>
+#include <sstream>
+#include <iomanip>
+#include <iostream>
 #include "TerminalMatrix.h"
 #include "config.h"
 #include "Rodent.h"
+#include "PopulationManager.h"
+#include "Ghost.h"
 
 int main() {
+    std::cout << "Starting Cursed World...\n";
+
+    // Try to load best brain from previous run BEFORE ncurses
+    std::vector<double> bestWeights;
+    std::cout << "Checking for saved brain...\n";
+    try {
+        NeuralNetwork tempBrain({32, 16, 8, 3});  // Same architecture as rodents
+        if (tempBrain.loadFromFile("best_brain.dat")) {
+            bestWeights = tempBrain.getWeights();
+            std::cout << "[✓] Loaded best brain from previous run - " << bestWeights.size() << " weights\n";
+        } else {
+            std::cout << "[!] No compatible brain file found - starting fresh\n";
+        }
+    } catch (const std::exception& e) {
+        std::cout << "[!] Failed to load best brain: " << e.what() << " - starting fresh\n";
+        bestWeights.clear();
+    } catch (...) {
+        std::cout << "[!] Failed to load best brain - starting fresh\n";
+        bestWeights.clear();
+    }
+
     // Start timing
     auto start_time = std::chrono::high_resolution_clock::now();
 
+    std::cout << "Setting locale...\n";
     // Set locale for UTF-8 support
     setlocale(LC_ALL, "");
 
+    std::cout << "Initializing ncurses...\n";
     // Initialize ncurses
     initscr();
 
@@ -37,8 +65,8 @@ int main() {
     int max_y, max_x;
     getmaxyx(stdscr, max_y, max_x);
 
-    // Create terminal matrix (no dashboard line)
-    TerminalMatrix matrix(max_x, max_y, 0);
+    // Create terminal matrix with dashboard line for stats
+    TerminalMatrix matrix(max_x, max_y, 1);
 
     // Load config from YAML
     TerrainConfig::Ratios config = TerrainConfig::loadConfig();
@@ -100,36 +128,32 @@ int main() {
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
     // Update window title with loading time
-    std::string title = "Cursed World | Load: " + std::to_string(duration.count()) + "ms";
+    std::string title = "Cursed World Evolution | Load: " + std::to_string(duration.count()) + "ms";
     matrix.setWindowTitle(title);
 
-    // Spawn a rodent in the middle of the map
-    int rodent_x = matrix.getWidth() / 2;
-    int rodent_y = matrix.getHeight() / 2;
-    Rodent rodent(rodent_x, rodent_y, "🐀");
+    // Initialize population manager
+    PopulationManager popManager(150, 2000, 5);  // Max 150 rodents, 2000 ticks per generation, 5 cats
 
-    // Store original characters for toggle
-    std::map<std::pair<int, int>, std::string> original_chars;
-    for (int y = 1; y < matrix.getHeight() - 1; y++) {
-        for (int x = 0; x < matrix.getWidth(); x++) {
-            Tile* tile = matrix.getTile(x, y);
-            if (tile) {
-                original_chars[{x, y}] = tile->getChar();
-            }
-        }
+    // Use the brain weights loaded earlier
+    popManager.initializePopulation(100, matrix, bestWeights);  // Start with 100 rodents
+    popManager.initializeCats(5, matrix);  // Start with 5 cats
+
+    // Create player-controlled ghost in the center
+    Ghost playerGhost(max_x / 2, max_y / 2, "👻");
+    Tile* ghostTile = matrix.getTile(max_x / 2, max_y / 2);
+    if (ghostTile) {
+        ghostTile->setActuator(&playerGhost);
     }
 
-    // Render the matrix with rodent
-    Tile* rodent_tile = matrix.getTile(rodent.getX(), rodent.getY());
-    std::string rodent_original = rodent_tile ? rodent_tile->getChar() : " ";
-    if (rodent_tile) {
-        rodent_tile->setChar(rodent.getChar());
-    }
+    // Render the matrix
     matrix.render();
 
     // Display mode flags
-    bool show_types = false;
     bool paused = true;  // Start paused
+
+    // Wall animation timer
+    auto lastWallToggle = std::chrono::high_resolution_clock::now();
+    const int wallAnimationInterval = 2;  // Toggle every 2 seconds
 
     // Set non-blocking input
     nodelay(stdscr, TRUE);
@@ -144,99 +168,89 @@ int main() {
             paused = !paused;
         } else if (ch == 't' || ch == 'T') {
             // Toggle type display mode
-            show_types = !show_types;
-
-            // Update display
-            for (int y = 1; y < matrix.getHeight() - 1; y++) {
-                for (int x = 0; x < matrix.getWidth(); x++) {
-                    Tile* tile = matrix.getTile(x, y);
-                    if (tile) {
-                        if (show_types) {
-                            // Show type as letter
-                            TerrainType terrain = tile->getTerrainType();
-                            if (terrain == TerrainType::EMPTY) {
-                                // Keep empty as is
-                            } else if (terrain == TerrainType::PLANTS) {
-                                tile->setChar("P");
-                            } else if (terrain == TerrainType::SEEDLINGS) {
-                                tile->setChar(tile->isEdible() ? "F" : "f");  // F for Food
-                            } else if (terrain == TerrainType::DEAD_TREES) {
-                                tile->setChar("O");  // O for obstacle
-                            } else if (terrain == TerrainType::ROCKS) {
-                                tile->setChar("O");  // O for obstacle
-                            }
-                        } else {
-                            // Restore original emoji
-                            tile->setChar(original_chars[{x, y}]);
-                        }
-                    }
-                }
-            }
-
-            // Re-render rodent on top
-            rodent_tile = matrix.getTile(rodent.getX(), rodent.getY());
-            if (rodent_tile) {
-                if (show_types) {
-                    rodent_tile->setChar("R");  // R for Rodent in type mode
-                } else {
-                    rodent_tile->setChar(rodent.getChar());
-                }
-            }
-
+            bool current = matrix.getTypeView();
+            matrix.setTypeView(!current);
+            clear();  // Clear the entire screen to remove artifacts
             matrix.render();
+        } else if (ch == KEY_UP) {
+            playerGhost.move(0, -1, matrix);
+            playerGhost.killNearbyMice(matrix);
+            matrix.render();
+        } else if (ch == KEY_DOWN) {
+            playerGhost.move(0, 1, matrix);
+            playerGhost.killNearbyMice(matrix);
+            matrix.render();
+        } else if (ch == KEY_LEFT) {
+            playerGhost.move(-1, 0, matrix);
+            playerGhost.killNearbyMice(matrix);
+            matrix.render();
+        } else if (ch == KEY_RIGHT) {
+            playerGhost.move(1, 0, matrix);
+            playerGhost.killNearbyMice(matrix);
+            matrix.render();
+        }
+
+        // Check if it's time to toggle wall animation
+        auto now = std::chrono::high_resolution_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastWallToggle);
+        if (elapsed.count() >= wallAnimationInterval) {
+            matrix.toggleWallAnimation();
+            lastWallToggle = now;
         }
 
         // Update simulation if not paused
         if (!paused) {
-            // Restore terrain at old rodent position
-            rodent_tile = matrix.getTile(rodent.getX(), rodent.getY());
-            if (rodent_tile) {
-                if (show_types) {
-                    TerrainType terrain = rodent_tile->getTerrainType();
-                    if (terrain == TerrainType::SEEDLINGS && rodent_tile->isEdible()) {
-                        rodent_tile->setChar("F");
-                    } else if (terrain == TerrainType::DEAD_TREES || terrain == TerrainType::ROCKS) {
-                        rodent_tile->setChar("O");
-                    } else if (terrain == TerrainType::PLANTS) {
-                        rodent_tile->setChar("P");
-                    } else {
-                        rodent_tile->setChar(original_chars[{rodent.getX(), rodent.getY()}]);
-                    }
-                } else {
-                    rodent_tile->setChar(original_chars[{rodent.getX(), rodent.getY()}]);
-                }
-            }
+            // Update population
+            popManager.update(matrix);
 
-            // Update rodent AI
-            rodent.update(matrix);
-
-            // Update original_chars if rodent ate something
-            rodent_tile = matrix.getTile(rodent.getX(), rodent.getY());
-            if (rodent_tile) {
-                original_chars[{rodent.getX(), rodent.getY()}] = rodent_tile->getChar();
-            }
-
-            // Draw rodent at new position
-            if (rodent_tile) {
-                if (show_types) {
-                    rodent_tile->setChar("R");
-                } else {
-                    rodent_tile->setChar(rodent.getChar());
-                }
-            }
+            // Update dashboard with stats
+            auto stats = popManager.getStats();
+            std::stringstream ss;
+            ss << "Gen: " << stats.generation
+               << " | Tick: " << stats.tick << "/" << popManager.getGenerationLength()
+               << " | Mice: " << stats.alive << "/" << (stats.alive + stats.dead)
+               << " | Cats: " << popManager.getCatCount()
+               << " | Avg Energy: " << std::fixed << std::setprecision(1) << stats.avgEnergy
+               << " | Best Fit: " << std::fixed << std::setprecision(1) << stats.bestFitness;
+            matrix.setDashboard(ss.str());
 
             matrix.render();
 
-            // Delay for visible updates (60 FPS)
-            napms(16);
+            // Delay for visible updates (slower movement)
+            napms(100);
         } else {
             // When paused, sleep a bit to reduce CPU usage
             napms(50);
         }
     }
 
+    // Get final stats before cleanup
+    auto finalStats = popManager.getStats();
+
+    // Save best rodent's brain
+    Rodent* bestRodent = popManager.getBestRodent();
+    if (bestRodent) {
+        if (bestRodent->getBrain().saveToFile("best_brain.dat")) {
+            std::cout << "\n[Saved best brain to best_brain.dat]\n";
+        }
+    }
+
     // Clean up and exit
     endwin();
+
+    // Print summary to standard output
+    std::cout << "\n=== CURSED WORLD EVOLUTION SUMMARY ===\n";
+    std::cout << "Final Generation: " << finalStats.generation << "\n";
+    std::cout << "Final Tick: " << finalStats.tick << "\n";
+    std::cout << "Population:\n";
+    std::cout << "  - Alive: " << finalStats.alive << "\n";
+    std::cout << "  - Total Deaths: " << finalStats.totalDeaths << "\n";
+    std::cout << "  - Current Total: " << (finalStats.alive + finalStats.dead) << "\n";
+    std::cout << "Performance:\n";
+    std::cout << "  - Average Energy: " << std::fixed << std::setprecision(2) << finalStats.avgEnergy << "\n";
+    std::cout << "  - Average Fitness: " << std::fixed << std::setprecision(2) << finalStats.avgFitness << "\n";
+    std::cout << "  - Best Fitness: " << std::fixed << std::setprecision(2) << finalStats.bestFitness << "\n";
+    std::cout << "======================================\n\n";
 
     return 0;
 }

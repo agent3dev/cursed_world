@@ -9,7 +9,8 @@ enum class ActuatorType {
     TRAP,
     ITEM,
     ENEMY,
-    RODENT
+    RODENT,
+    CAT
 };
 
 class Actuator {

@@ -2,7 +2,7 @@
 #include <cstdio>
 
 TerminalMatrix::TerminalMatrix(int w, int h, int dashHeight)
-    : width(w), height(h), dashboardHeight(dashHeight), dashboardText("") {
+    : width(w), height(h), dashboardHeight(dashHeight), dashboardText(""), type_view(false), wallAnimationState(false) {
     matrix.resize(height, std::vector<Tile>(width, Tile()));
 }
 
@@ -60,17 +60,24 @@ void TerminalMatrix::clear(const std::string& fillChar) {
 }
 
 void TerminalMatrix::margin(const std::string& borderChar) {
-    // Draw top border below dashboard and bottom border
+    // Draw only top and bottom borders (no side walls)
     for (int x = 0; x < width; x++) {
         setChar(x, 0, borderChar);  // First line after dashboard
         setChar(x, getHeight() - 1, borderChar);  // Last line
+
+        // Mark as non-walkable obstacles
+        Tile* topTile = getTile(x, 0);
+        Tile* bottomTile = getTile(x, getHeight() - 1);
+        if (topTile) topTile->setWalkable(false);
+        if (bottomTile) bottomTile->setWalkable(false);
     }
 }
 
 void TerminalMatrix::render() const {
+    // Clear the entire screen first
+    erase();
+
     // Render dashboard at the top
-    move(0, 0);
-    clrtoeol();
     mvaddstr(0, 0, dashboardText.c_str());
 
     // Render matrix
@@ -78,7 +85,45 @@ void TerminalMatrix::render() const {
         int col = 0;  // Track actual terminal column
         for (int x = 0; x < width; x++) {
             const Tile& tile = matrix[y][x];
-            const std::string& ch = tile.getChar();
+            std::string ch;
+
+            // Check if this is a border tile (top or bottom row)
+            bool isTopBorder = (y == dashboardHeight);
+            bool isBottomBorder = (y == height - 1);
+            bool isBorder = isTopBorder || isBottomBorder;
+
+            if (isBorder && !tile.isWalkable()) {
+                // Animated border: alternating pattern ⬛⬜⬛⬜
+                bool useBlack;
+                if (wallAnimationState) {
+                    useBlack = (x % 2 == 0);  // Even positions: black
+                } else {
+                    useBlack = (x % 2 == 1);  // Odd positions: black (swapped)
+                }
+                ch = useBlack ? "⬛" : "⬜";
+            } else if (type_view) {
+                // Type view: single character mode
+                if (tile.hasActuator()) {
+                    if (tile.getActuator()->getType() == ActuatorType::CAT) {
+                        ch = "C";
+                    } else {
+                        ch = "R";
+                    }
+                } else if (tile.isEdible()) {
+                    ch = "F";
+                } else if (!tile.isWalkable()) {
+                    ch = "O";
+                } else {
+                    ch = ".";
+                }
+            } else {
+                // Emoji view: display actuator on top if present
+                if (tile.hasActuator()) {
+                    ch = tile.getActuator()->getChar();
+                } else {
+                    ch = tile.getChar();
+                }
+            }
 
             if (tile.getColorPair() > 0) {
                 attron(COLOR_PAIR(tile.getColorPair()));
@@ -88,11 +133,11 @@ void TerminalMatrix::render() const {
                 mvaddstr(y, col, ch.c_str());
             }
 
-            // Wide characters (emojis) take 2 columns
-            if (ch.length() > 1) {
-                col += 2;
-            } else {
+            // In type view, always advance by 1; in emoji view, everything takes 2 columns
+            if (type_view) {
                 col += 1;
+            } else {
+                col += 2;  // All tiles take 2 columns (emojis or double-space)
             }
         }
     }

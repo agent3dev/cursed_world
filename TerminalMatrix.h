@@ -13,9 +13,15 @@ private:
     int dashboardHeight;
     std::vector<std::vector<Tile>> matrix;
     std::string dashboardText;
+    bool type_view;  // Toggle between emoji and type display
+    bool wallAnimationState;  // Toggle between ⬛ and ⬜ for wall animation
 
 public:
     TerminalMatrix(int w, int h, int dashHeight = 1);
+
+    // Type view mode
+    bool getTypeView() const { return type_view; }
+    void setTypeView(bool tv) { type_view = tv; }
 
     // Get dimensions (excluding dashboard)
     int getWidth() const { return width; }
@@ -43,6 +49,9 @@ public:
 
     // Draw a margin/border with specified character
     void margin(const std::string& borderChar = "#");
+
+    // Toggle wall animation state
+    void toggleWallAnimation() { wallAnimationState = !wallAnimationState; }
 
     // Render the matrix to the terminal
     void render() const;

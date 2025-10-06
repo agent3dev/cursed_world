@@ -4,9 +4,7 @@
 #include <string>
 #include <vector>
 #include <map>
-
-// Forward declaration
-class Actuator;
+#include "Actuator.h"
 
 enum class TileType {
     TERRAIN,
@@ -32,8 +30,8 @@ enum class SoilType {
 
 // Unicode character options for each terrain type
 const std::map<TerrainType, std::vector<std::string>> TERRAIN_CHARS = {
-    {TerrainType::EMPTY, {" "}},
-    {TerrainType::PLANTS, {" "}},
+    {TerrainType::EMPTY, {"  "}},  // Two spaces to match emoji width
+    {TerrainType::PLANTS, {"  "}},
     {TerrainType::SEEDLINGS, {"🌱"}},
     {TerrainType::DEAD_TREES, {"🪾"}},
     {TerrainType::ROCKS, {"🪨"}}
@@ -52,7 +50,7 @@ private:
     Actuator* actuator;  // nullptr if no actuator on this tile
 
 public:
-    Tile(const std::string& c = " ", bool walk = true, bool trans = true, int color = 0, TileType t = TileType::SOIL, TerrainType tt = TerrainType::EMPTY, SoilType st = SoilType::DRY);
+    Tile(const std::string& c = "  ", bool walk = true, bool trans = true, int color = 0, TileType t = TileType::SOIL, TerrainType tt = TerrainType::EMPTY, SoilType st = SoilType::DRY);
     ~Tile();
 
     // Getters
