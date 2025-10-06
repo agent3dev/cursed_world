@@ -2,9 +2,12 @@
 #include "Actuator.h"
 #include <cmath>
 
+// Initialize static ID counter
+int Rodent::nextId = 1;
+
 Rodent::Rodent(int posX, int posY, const std::string& c, const std::vector<double>& weights)
     : Actuator(posX, posY, c, ActuatorType::RODENT), energy(100.0), foodEaten(0), age(0), alive(true),
-      brain({9, 16, 9}) {  // Input: 9 (8 tiles + energy), Hidden: 16, Output: 9 (8 directions + stay)
+      brain({9, 16, 9}), ticksSinceLastPoop(0), id(nextId++) {  // Input: 9 (8 tiles + energy), Hidden: 16, Output: 9 (8 directions + stay)
 
     if (weights.empty()) {
         // No weights provided, randomize
@@ -30,23 +33,23 @@ std::vector<double> Rodent::getSurroundingInfo(TerminalMatrix& matrix) {
         Tile* tile = matrix.getTile(getX() + dx, getY() + dy);
 
         if (!tile) {
-            // Out of bounds = 6
-            info.push_back(6.0);
+            // Out of bounds = 7 (same as wall)
+            info.push_back(7.0);
         } else {
             // Check for cat first (highest priority)
             if (tile->hasActuator()) {
                 Actuator* act = tile->getActuator();
                 if (act && act->getType() == ActuatorType::CAT) {
-                    info.push_back(5.0);  // CAT = 5
+                    info.push_back(6.0);  // CAT = 6
                     continue;
                 }
             }
 
             // Check if wall/obstacle
             if (!tile->isWalkable()) {
-                info.push_back(6.0);  // WALL = 6
+                info.push_back(7.0);  // WALL = 7
             } else {
-                // Encode terrain type: 0=EMPTY, 1=PLANTS, 2=SEEDLINGS, 3=DEAD_TREES, 4=ROCKS
+                // Encode terrain type: 0=EMPTY, 1=PLANTS, 2=SEEDLINGS, 3=DEAD_TREES, 4=ROCKS, 5=SEED
                 TerrainType terrain = tile->getTerrainType();
                 info.push_back(static_cast<double>(terrain));
             }
@@ -71,6 +74,17 @@ void Rodent::move(int dx, int dy, TerminalMatrix& matrix) {
     // Check if new position is valid and walkable
     Tile* tile = matrix.getTile(newX, newY);
     if (tile && tile->isWalkable()) {
+        // Check if there's a cat on the target tile - if so, die!
+        if (tile->hasActuator()) {
+            Actuator* act = tile->getActuator();
+            if (act && act->getType() == ActuatorType::CAT) {
+                // Mouse walks into cat - instant death!
+                alive = false;
+                energy = 0.0;
+                return;
+            }
+        }
+
         // Movement costs energy
         energy -= 0.2;
 
@@ -101,18 +115,35 @@ void Rodent::eat(TerminalMatrix& matrix) {
     }
 }
 
+void Rodent::poop(TerminalMatrix& matrix) {
+    Tile* tile = matrix.getTile(getX(), getY());
+    // Only poop on empty tiles
+    if (tile && tile->getTerrainType() == TerrainType::EMPTY && !tile->hasActuator()) {
+        tile->setTerrainType(TerrainType::SEED);
+        tile->setChar("🔸");
+        tile->setGrowthTimer(100);  // 100 ticks until seed grows into seedling
+        ticksSinceLastPoop = 0;
+    }
+}
+
 void Rodent::update(TerminalMatrix& matrix) {
     if (!alive) return;
 
     // Passive energy drain
     energy -= 0.05;
     age++;
+    ticksSinceLastPoop++;
 
     // Check for starvation
     if (energy <= 0.0) {
         alive = false;
         energy = 0.0;
         return;
+    }
+
+    // Poop every 50 ticks (creates seeds for plant regrowth)
+    if (ticksSinceLastPoop >= 50) {
+        poop(matrix);
     }
 
     // Get surrounding tile information

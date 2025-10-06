@@ -16,7 +16,8 @@ enum class TerrainType {
     PLANTS,
     SEEDLINGS,
     DEAD_TREES,
-    ROCKS
+    ROCKS,
+    SEED  // Brown seed that will grow into seedling
 };
 
 enum class SoilType {
@@ -34,7 +35,8 @@ const std::map<TerrainType, std::vector<std::string>> TERRAIN_CHARS = {
     {TerrainType::PLANTS, {"  "}},
     {TerrainType::SEEDLINGS, {"🌱"}},
     {TerrainType::DEAD_TREES, {"🪾"}},
-    {TerrainType::ROCKS, {"🪨"}}
+    {TerrainType::ROCKS, {"🪨"}},
+    {TerrainType::SEED, {"🔸"}}  // Seed
 };
 
 class Tile {
@@ -48,6 +50,7 @@ private:
     TerrainType terrainType;
     SoilType soilType;
     Actuator* actuator;  // nullptr if no actuator on this tile
+    int growthTimer;  // Ticks until seed grows into seedling (0 = not growing)
 
 public:
     Tile(const std::string& c = "  ", bool walk = true, bool trans = true, int color = 0, TileType t = TileType::SOIL, TerrainType tt = TerrainType::EMPTY, SoilType st = SoilType::DRY);
@@ -64,6 +67,7 @@ public:
     SoilType getSoilType() const { return soilType; }
     Actuator* getActuator() const { return actuator; }
     bool hasActuator() const { return actuator != nullptr; }
+    int getGrowthTimer() const { return growthTimer; }
 
     // Setters
     void setChar(const std::string& c) { displayChar = c; }
@@ -75,6 +79,10 @@ public:
     void setTerrainType(TerrainType tt) { terrainType = tt; }
     void setSoilType(SoilType st) { soilType = st; }
     void setActuator(Actuator* act) { actuator = act; }
+    void setGrowthTimer(int ticks) { growthTimer = ticks; }
+
+    // Growth logic
+    void tickGrowth();  // Decrease growth timer and convert to seedling when ready
 };
 
 #endif

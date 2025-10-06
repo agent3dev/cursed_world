@@ -1,6 +1,11 @@
 # Compiled binaries
 cursed_world
+evolution/evolution
 *.o
+
+# Build directories
+evolution/build/
+*/build/
 
 # Build artifacts
 *.exe
@@ -9,6 +14,11 @@ cursed_world
 
 # Neural network save files
 best_brain.dat
+evolution/best_brain.dat
+
+# Debug logs
+evolution/death_log.txt
+death_log.txt
 
 # IDE/Editor files
 .vscode/

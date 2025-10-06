@@ -10,6 +10,8 @@ private:
     std::vector<int> layer_sizes;  // [input_size, hidden1, hidden2, ..., output_size]
     std::vector<std::vector<std::vector<double>>> weights;  // weights[layer][neuron][input]
     std::vector<std::vector<double>> biases;  // biases[layer][neuron]
+    std::vector<std::vector<double>> recurrent_weights;  // Recurrent weights from hidden to hidden
+    std::vector<double> hidden_state;  // Memory: previous hidden layer activation
 
     // Activation function (sigmoid)
     double sigmoid(double x) const {
@@ -41,8 +43,11 @@ public:
     // Get total number of weights
     int getWeightCount() const;
 
-    // Forward pass: input -> output
+    // Forward pass: input -> output (with recurrent memory)
     std::vector<double> forward(const std::vector<double>& input);
+
+    // Reset hidden state (memory)
+    void resetHiddenState();
 
     // Mutate weights for evolution
     void mutate(double mutation_rate, double mutation_amount);

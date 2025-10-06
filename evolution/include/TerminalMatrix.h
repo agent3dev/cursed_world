@@ -61,6 +61,9 @@ public:
 
     // Check if coordinates are valid
     bool isValid(int x, int y) const;
+
+    // Update growth timers for all tiles
+    void updateGrowth();
 };
 
 #endif

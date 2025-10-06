@@ -1,9 +1,22 @@
 #include "PopulationManager.h"
 #include <random>
 #include <algorithm>
+#include <fstream>
+#include <iomanip>
+#include <chrono>
+#include <ctime>
 
 PopulationManager::PopulationManager(int maxPop, int genLength, int maxCatCount)
-    : generation(0), maxPopulation(maxPop), generationLength(genLength), currentTick(0), maxCats(maxCatCount), totalDeaths(0) {}
+    : generation(0), maxPopulation(maxPop), generationLength(genLength), currentTick(0), maxCats(maxCatCount), totalDeaths(0) {
+    // Initialize debug log
+    debugLog.open("death_log.txt", std::ios::app);
+    if (debugLog.is_open()) {
+        auto now = std::chrono::system_clock::now();
+        auto time = std::chrono::system_clock::to_time_t(now);
+        debugLog << "\n=== Simulation started: " << std::ctime(&time);
+        debugLog << "Generation,Tick,MouseID,PosX,PosY,Energy,Age,FoodEaten,Cause\n";
+    }
+}
 
 void PopulationManager::initializePopulation(int count, TerminalMatrix& matrix, const std::vector<double>& bestWeights) {
     std::random_device rd;
@@ -231,12 +244,26 @@ void PopulationManager::removeDeadRodents(TerminalMatrix& matrix) {
         std::remove_if(population.begin(), population.end(),
             [&matrix, &deadCount, this](const std::unique_ptr<Rodent>& rodent) {
                 if (!rodent->isAlive()) {
+                    // Log death details
+                    if (debugLog.is_open()) {
+                        debugLog << generation << ","
+                                 << currentTick << ","
+                                 << rodent->getId() << ","
+                                 << rodent->getX() << ","
+                                 << rodent->getY() << ","
+                                 << std::fixed << std::setprecision(2) << rodent->getEnergy() << ","
+                                 << rodent->getAge() << ","
+                                 << rodent->getFoodEaten() << ","
+                                 << (rodent->getEnergy() <= 0.0 ? "Starvation" : "Eaten") << "\n";
+                        debugLog.flush();
+                    }
+
                     // Place tombstone and remove from tile
                     Tile* tile = matrix.getTile(rodent->getX(), rodent->getY());
                     if (tile && tile->getActuator() == rodent.get()) {
                         tile->setActuator(nullptr);
                         tile->setChar("🪦");  // Tombstone
-                        // Don't block movement - tombstones are just visual
+                        tile->setWalkable(false);  // Tombstones are obstacles
                     }
                     deadCount++;
                     return true;
@@ -249,41 +276,23 @@ void PopulationManager::removeDeadRodents(TerminalMatrix& matrix) {
     // Track cumulative deaths
     totalDeaths += deadCount;
 
-    // Spawn new random mice to replace the dead ones
-    // Limit spawn to max 10 per update to prevent memory spikes
-    if (deadCount > 0 && population.size() < static_cast<size_t>(maxPopulation)) {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<> x_dist(1, matrix.getWidth() - 2);
-        std::uniform_int_distribution<> y_dist(1, matrix.getHeight() - 2);
-
-        int spawnCount = std::min({deadCount, maxPopulation - static_cast<int>(population.size()), 10});
-
-        for (int i = 0; i < spawnCount; i++) {
-            int x = x_dist(gen);
-            int y = y_dist(gen);
-            Tile* tile = matrix.getTile(x, y);
-
-            int attempts = 0;
-            while ((!tile || !tile->isWalkable() || tile->hasActuator()) && attempts < 50) {
-                x = x_dist(gen);
-                y = y_dist(gen);
-                tile = matrix.getTile(x, y);
-                attempts++;
-            }
-
-            if (tile && tile->isWalkable() && !tile->hasActuator()) {
-                // Spawn fresh random rodent
-                auto rodent = std::make_unique<Rodent>(x, y, "🐀");
-                tile->setActuator(rodent.get());
-                population.push_back(std::move(rodent));
-            }
-        }
-    }
+    // Don't respawn mice - let the generation play out naturally
 }
 
 void PopulationManager::evolveGeneration(TerminalMatrix& matrix) {
     generation++;
+
+    // Clear all tombstones from the map
+    for (int y = 0; y < matrix.getHeight(); y++) {
+        for (int x = 0; x < matrix.getWidth(); x++) {
+            Tile* tile = matrix.getTile(x, y);
+            if (tile && tile->getChar() == "🪦") {
+                tile->setChar("  ");  // Reset to empty
+                tile->setWalkable(true);  // Make walkable again
+                tile->setTerrainType(TerrainType::EMPTY);
+            }
+        }
+    }
 
     // Sort by fitness
     std::sort(population.begin(), population.end(),

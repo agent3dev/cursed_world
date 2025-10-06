@@ -16,6 +16,13 @@ NeuralNetwork::NeuralNetwork(const std::vector<int>& layers) : layer_sizes(layer
         std::vector<double> layer_biases(next_size, 0.0);
         biases.push_back(layer_biases);
     }
+
+    // Initialize recurrent weights for hidden layer (first hidden layer only)
+    if (layers.size() >= 2) {
+        int hidden_size = layers[1];  // First hidden layer
+        recurrent_weights.resize(hidden_size, std::vector<double>(hidden_size, 0.0));
+        hidden_state.resize(hidden_size, 0.0);  // Initialize to zeros
+    }
 }
 
 void NeuralNetwork::randomize(double min, double max) {
@@ -34,6 +41,13 @@ void NeuralNetwork::randomize(double min, double max) {
     for (auto& layer : biases) {
         for (auto& bias : layer) {
             bias = dis(gen);
+        }
+    }
+
+    // Randomize recurrent weights
+    for (auto& neuron : recurrent_weights) {
+        for (auto& weight : neuron) {
+            weight = dis(gen);
         }
     }
 }
@@ -60,6 +74,15 @@ void NeuralNetwork::setWeights(const std::vector<double>& flat_weights) {
             }
         }
     }
+
+    // Set recurrent weights
+    for (size_t n = 0; n < recurrent_weights.size(); n++) {
+        for (size_t w = 0; w < recurrent_weights[n].size(); w++) {
+            if (index < flat_weights.size()) {
+                recurrent_weights[n][w] = flat_weights[index++];
+            }
+        }
+    }
 }
 
 std::vector<double> NeuralNetwork::getWeights() const {
@@ -81,6 +104,13 @@ std::vector<double> NeuralNetwork::getWeights() const {
         }
     }
 
+    // Get recurrent weights
+    for (const auto& neuron : recurrent_weights) {
+        for (const auto& weight : neuron) {
+            flat_weights.push_back(weight);
+        }
+    }
+
     return flat_weights;
 }
 
@@ -99,6 +129,11 @@ int NeuralNetwork::getWeightCount() const {
         count += layer.size();
     }
 
+    // Count recurrent weights
+    for (const auto& neuron : recurrent_weights) {
+        count += neuron.size();
+    }
+
     return count;
 }
 
@@ -112,16 +147,25 @@ std::vector<double> NeuralNetwork::forward(const std::vector<double>& input) {
         for (size_t n = 0; n < weights[l].size(); n++) {
             double sum = biases[l][n];
 
+            // Add input from previous layer
             for (size_t i = 0; i < current.size(); i++) {
                 sum += current[i] * weights[l][n][i];
             }
 
-            // Use tanh for hidden layers, sigmoid for output layer
-            if (l < weights.size() - 1) {
-                next[n] = tanh_activation(sum);
-            } else {
-                next[n] = tanh_activation(sum);  // Output in range [-1, 1]
+            // Add recurrent connections (only for first hidden layer)
+            if (l == 0 && !hidden_state.empty()) {
+                for (size_t i = 0; i < hidden_state.size(); i++) {
+                    sum += hidden_state[i] * recurrent_weights[n][i];
+                }
             }
+
+            // Use tanh for all layers
+            next[n] = tanh_activation(sum);
+        }
+
+        // Store hidden state after first layer (memory)
+        if (l == 0 && !recurrent_weights.empty()) {
+            hidden_state = next;
         }
 
         current = next;
@@ -154,6 +198,22 @@ void NeuralNetwork::mutate(double mutation_rate, double mutation_amount) {
                 bias += mutation(gen);
             }
         }
+    }
+
+    // Mutate recurrent weights
+    for (auto& neuron : recurrent_weights) {
+        for (auto& weight : neuron) {
+            if (prob(gen) < mutation_rate) {
+                weight += mutation(gen);
+            }
+        }
+    }
+}
+
+void NeuralNetwork::resetHiddenState() {
+    // Reset hidden state to zeros
+    for (auto& h : hidden_state) {
+        h = 0.0;
     }
 }
 

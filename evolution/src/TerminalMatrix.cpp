@@ -171,3 +171,12 @@ void TerminalMatrix::resize(int w, int h) {
 bool TerminalMatrix::isValid(int x, int y) const {
     return x >= 0 && x < width && y >= 0 && y < height;
 }
+
+void TerminalMatrix::updateGrowth() {
+    // Update growth timers for all tiles
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            matrix[y][x].tickGrowth();
+        }
+    }
+}

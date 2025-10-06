@@ -204,6 +204,9 @@ int main() {
             // Update population
             popManager.update(matrix);
 
+            // Update seed growth timers
+            matrix.updateGrowth();
+
             // Update dashboard with stats
             auto stats = popManager.getStats();
             std::stringstream ss;
@@ -220,7 +223,8 @@ int main() {
             titleStream << "Cursed World Evolution | Gen: " << stats.generation
                        << " | Tick: " << stats.tick
                        << " | Mice: " << stats.alive
-                       << " | Cats: " << popManager.getCatCount();
+                       << " | Cats: " << popManager.getCatCount()
+                       << " | Best: " << std::fixed << std::setprecision(1) << stats.bestFitness;
             matrix.setWindowTitle(titleStream.str());
 
             matrix.render();

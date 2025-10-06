@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include <algorithm>
+#include <fstream>
 #include "Rodent.h"
 #include "Cat.h"
 #include "TerminalMatrix.h"
@@ -18,6 +19,7 @@ private:
     int currentTick;
     int maxCats;
     int totalDeaths;  // Track cumulative deaths
+    std::ofstream debugLog;  // Debug log for death tracking
 
 public:
     PopulationManager(int maxPop = 100, int genLength = 1000, int maxCatCount = 3);

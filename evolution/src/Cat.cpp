@@ -153,7 +153,7 @@ void Cat::update(TerminalMatrix& matrix) {
         return;
     }
 
-    // Cats move slower than rodents (every 3 ticks)
+    // Cats move at same speed as mice
     if (moveCooldown > 0) {
         return;  // Still on cooldown, skip movement
     }
@@ -189,7 +189,7 @@ void Cat::update(TerminalMatrix& matrix) {
     if (dx != 0 || dy != 0) {
         bool moved = move(dx, dy, matrix);
         if (moved) {
-            moveCooldown = 3;  // Wait 3 ticks before next move (only if moved)
+            moveCooldown = 0;  // Same speed as mice (no cooldown)
         }
         // If movement failed, no cooldown - try again next tick with new direction
     }

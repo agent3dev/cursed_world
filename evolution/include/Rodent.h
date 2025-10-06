@@ -17,6 +17,9 @@ private:
     int age;  // Age in ticks
     bool alive;  // Is the rodent alive?
     NeuralNetwork brain;
+    int ticksSinceLastPoop;  // Track ticks since last poop
+    int id;  // Unique ID for debugging
+    static int nextId;  // Static counter for IDs
 
     // Encode surrounding tiles into neural network input
     std::vector<double> getSurroundingInfo(TerminalMatrix& matrix);
@@ -31,6 +34,7 @@ public:
     const std::string& getChar() const { return Actuator::getChar(); }
     double getEnergy() const { return energy; }
     int getFoodEaten() const { return foodEaten; }
+    int getId() const { return id; }
     int getAge() const { return age; }
     bool isAlive() const { return alive; }
     double getFitness() const { return foodEaten * 10.0 + age * 0.1; }  // Fitness = food priority + survival bonus
@@ -40,10 +44,12 @@ public:
     // Actions
     void move(int dx, int dy, TerminalMatrix& matrix);
     void eat(TerminalMatrix& matrix);
+    void poop(TerminalMatrix& matrix);  // Leave seed that will grow into seedling
     void update(TerminalMatrix& matrix);  // Main update logic (now uses neural network)
     bool canReproduce() const { return alive && energy >= 120.0; }  // Can reproduce at high energy
     Rodent* reproduce(int posX, int posY);  // Create offspring with mutated brain
     void kill() { alive = false; energy = 0.0; }  // Instantly kill the rodent
+    void resetMemory() { brain.resetHiddenState(); }  // Reset recurrent memory
 
     // Setters
     void setPosition(int posX, int posY) { Actuator::setPosition(posX, posY); }
