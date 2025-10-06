@@ -6,6 +6,17 @@
 #include <chrono>
 #include <ctime>
 
+// Helper to safely create position distributions
+static std::uniform_int_distribution<> safeXDist(const TerminalMatrix& matrix) {
+    int max_x = std::max(2, matrix.getWidth() - 2);  // Ensure at least (1, 2)
+    return std::uniform_int_distribution<>(1, max_x);
+}
+
+static std::uniform_int_distribution<> safeYDist(const TerminalMatrix& matrix) {
+    int max_y = std::max(2, matrix.getHeight() - 2);  // Ensure at least (1, 2)
+    return std::uniform_int_distribution<>(1, max_y);
+}
+
 PopulationManager::PopulationManager(int maxPop, int genLength, int maxCatCount)
     : generation(0), maxPopulation(maxPop), generationLength(genLength), currentTick(0), maxCats(maxCatCount), totalDeaths(0) {
     // Initialize debug log
@@ -21,8 +32,8 @@ PopulationManager::PopulationManager(int maxPop, int genLength, int maxCatCount)
 void PopulationManager::initializePopulation(int count, TerminalMatrix& matrix, const std::vector<double>& bestWeights) {
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<> x_dist(1, matrix.getWidth() - 2);
-    std::uniform_int_distribution<> y_dist(1, matrix.getHeight() - 2);
+    auto x_dist = safeXDist(matrix);
+    auto y_dist = safeYDist(matrix);
 
     for (int i = 0; i < count; i++) {
         int x = x_dist(gen);
@@ -52,8 +63,8 @@ void PopulationManager::initializePopulation(int count, TerminalMatrix& matrix, 
 void PopulationManager::initializeCats(int count, TerminalMatrix& matrix) {
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<> x_dist(1, matrix.getWidth() - 2);
-    std::uniform_int_distribution<> y_dist(1, matrix.getHeight() - 2);
+    auto x_dist = safeXDist(matrix);
+    auto y_dist = safeYDist(matrix);
 
     for (int i = 0; i < count; i++) {
         int x = x_dist(gen);
@@ -84,8 +95,8 @@ void PopulationManager::manageCats(TerminalMatrix& matrix) {
 
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<> x_dist(1, matrix.getWidth() - 2);
-    std::uniform_int_distribution<> y_dist(1, matrix.getHeight() - 2);
+    auto x_dist = safeXDist(matrix);
+    auto y_dist = safeYDist(matrix);
 
     // Try once to spawn a cat
     int x = x_dist(gen);
@@ -340,9 +351,8 @@ void PopulationManager::evolveGeneration(TerminalMatrix& matrix) {
     // Create new generation from parents
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<> parent_dist(0, parents.size() - 1);
-    std::uniform_int_distribution<> x_dist(1, matrix.getWidth() - 2);
-    std::uniform_int_distribution<> y_dist(1, matrix.getHeight() - 2);
+    auto x_dist = safeXDist(matrix);
+    auto y_dist = safeYDist(matrix);
 
     // Add parents back
     for (auto& parent : parents) {
@@ -378,9 +388,11 @@ void PopulationManager::evolveGeneration(TerminalMatrix& matrix) {
     if (offspringCount < 0) offspringCount = 0;
     if (offspringCount > maxPopulation) offspringCount = maxPopulation - population.size();
 
-    for (int i = 0; i < offspringCount && population.size() < static_cast<size_t>(maxPopulation); i++) {
-        if (population.empty()) break;  // Safety check
+    // Create parent distribution only if we have parents
+    if (population.empty()) return;  // Can't create offspring without parents
+    std::uniform_int_distribution<> parent_dist(0, population.size() - 1);
 
+    for (int i = 0; i < offspringCount && population.size() < static_cast<size_t>(maxPopulation); i++) {
         int parentIdx = parent_dist(gen);
         std::vector<double> parentWeights = population[parentIdx]->getBrain().getWeights();
 

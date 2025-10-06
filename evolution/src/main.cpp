@@ -140,8 +140,10 @@ int main() {
     popManager.initializeCats(5, matrix);  // Start with 5 cats
 
     // Create player-controlled ghost in the center
-    Ghost playerGhost(max_x / 2, max_y / 2, "👻");
-    Tile* ghostTile = matrix.getTile(max_x / 2, max_y / 2);
+    int ghostX = matrix.getWidth() / 2;
+    int ghostY = matrix.getHeight() / 2;
+    Ghost playerGhost(ghostX, ghostY, "👻");
+    Tile* ghostTile = matrix.getTile(ghostX, ghostY);
     if (ghostTile) {
         ghostTile->setActuator(&playerGhost);
     }
