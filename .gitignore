@@ -7,6 +7,9 @@ cursed_world
 *.out
 *.app
 
+# Neural network save files
+best_brain.dat
+
 # IDE/Editor files
 .vscode/
 .idea/
@@ -17,3 +20,6 @@ cursed_world
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local configuration
+.claude/settings.local.json

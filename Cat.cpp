@@ -70,7 +70,25 @@ bool Cat::move(int dx, int dy, TerminalMatrix& matrix) {
 
     // Check if new position is valid (cats can walk over rocks and dead trees)
     Tile* tile = matrix.getTile(newX, newY);
-    if (tile && !tile->hasActuator()) {  // Cats can go anywhere except where another actuator is
+    if (tile) {
+        // Check if there's a rodent on the target tile - if so, eat it!
+        if (tile->hasActuator()) {
+            Actuator* act = tile->getActuator();
+            if (act && act->getType() == ActuatorType::RODENT) {
+                Rodent* rodent = static_cast<Rodent*>(act);
+                if (rodent->isAlive() && eatCooldown == 0) {
+                    // Kill the rodent and move into its tile
+                    rodent->kill();
+                    tile->setActuator(nullptr);
+                    rodentsEaten++;
+                    eatCooldown = 30;  // Cooldown after eating
+                }
+            }
+            // Don't move into tiles with other actuators (ghost, other cats)
+            return false;
+        }
+
+        // Tile is empty - move into it
         // Remove actuator from old tile
         Tile* oldTile = matrix.getTile(getX(), getY());
         if (oldTile) {
@@ -79,12 +97,10 @@ bool Cat::move(int dx, int dy, TerminalMatrix& matrix) {
         // Set new position
         setPosition(newX, newY);
         // Set actuator on new tile
-        if (tile) {
-            tile->setActuator(this);
-        }
+        tile->setActuator(this);
         return true;  // Movement succeeded
     } else {
-        // Hit another actuator or invalid tile - change patrol direction
+        // Invalid tile - change patrol direction
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<> new_dir(0, 3);

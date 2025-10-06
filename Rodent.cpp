@@ -4,7 +4,7 @@
 
 Rodent::Rodent(int posX, int posY, const std::string& c, const std::vector<double>& weights)
     : Actuator(posX, posY, c, ActuatorType::RODENT), energy(100.0), foodEaten(0), age(0), alive(true),
-      brain({32, 16, 8, 3}) {  // Input: 32 (8 tiles * 4 features), Hidden: 16, 8, Output: 3 (dx, dy, eat)
+      brain({9, 16, 9}) {  // Input: 9 (8 tiles + energy), Hidden: 16, Output: 9 (8 directions + stay)
 
     if (weights.empty()) {
         // No weights provided, randomize
@@ -18,37 +18,45 @@ Rodent::Rodent(int posX, int posY, const std::string& c, const std::vector<doubl
 std::vector<double> Rodent::getSurroundingInfo(TerminalMatrix& matrix) {
     std::vector<double> info;
 
-    // 8 surrounding tiles (4 features each) = 32 features
-    for (int dy = -1; dy <= 1; dy++) {
-        for (int dx = -1; dx <= 1; dx++) {
-            if (dx == 0 && dy == 0) continue;  // Skip center
+    // 8 surrounding tiles, each encoded as single terrain type value
+    // Order: NW, N, NE, W, E, SW, S, SE
+    const int dx_order[] = {-1, 0, 1, -1, 1, -1, 0, 1};
+    const int dy_order[] = {-1, -1, -1, 0, 0, 1, 1, 1};
 
-            Tile* tile = matrix.getTile(getX() + dx, getY() + dy);
+    for (int i = 0; i < 8; i++) {
+        int dx = dx_order[i];
+        int dy = dy_order[i];
 
-            if (tile) {
-                info.push_back(tile->isWalkable() ? 1.0 : 0.0);
-                info.push_back(tile->isEdible() ? 1.0 : 0.0);
-                info.push_back(tile->isTransparent() ? 1.0 : 0.0);
+        Tile* tile = matrix.getTile(getX() + dx, getY() + dy);
 
-                // NEW: Cat detection - is there a cat on this tile?
-                bool hasCat = false;
-                if (tile->hasActuator()) {
-                    Actuator* act = tile->getActuator();
-                    if (act && act->getType() == ActuatorType::CAT) {
-                        hasCat = true;
-                    }
+        if (!tile) {
+            // Out of bounds = 6
+            info.push_back(6.0);
+        } else {
+            // Check for cat first (highest priority)
+            if (tile->hasActuator()) {
+                Actuator* act = tile->getActuator();
+                if (act && act->getType() == ActuatorType::CAT) {
+                    info.push_back(5.0);  // CAT = 5
+                    continue;
                 }
-                info.push_back(hasCat ? 1.0 : 0.0);
+            }
+
+            // Check if wall/obstacle
+            if (!tile->isWalkable()) {
+                info.push_back(6.0);  // WALL = 6
             } else {
-                info.push_back(0.0);
-                info.push_back(0.0);
-                info.push_back(0.0);
-                info.push_back(0.0);
+                // Encode terrain type: 0=EMPTY, 1=PLANTS, 2=SEEDLINGS, 3=DEAD_TREES, 4=ROCKS
+                TerrainType terrain = tile->getTerrainType();
+                info.push_back(static_cast<double>(terrain));
             }
         }
     }
 
-    return info;  // 8 tiles * 4 features = 32 inputs
+    // Add normalized energy level as 9th input (0-1 range, max energy = 150)
+    info.push_back(energy / 150.0);
+
+    return info;  // 9 inputs
 }
 
 void Rodent::move(int dx, int dy, TerminalMatrix& matrix) {
@@ -113,20 +121,27 @@ void Rodent::update(TerminalMatrix& matrix) {
     // Feed through neural network
     std::vector<double> output = brain.forward(input);
 
-    // Output interpretation:
-    // output[0] = dx movement (-1 to 1)
-    // output[1] = dy movement (-1 to 1)
-    // output[2] = eat action (-1 to 1, >0 means try to eat)
+    // Output interpretation: 9 outputs for 8 directions + stay
+    // 0=NW, 1=N, 2=NE, 3=W, 4=E, 5=SW, 6=S, 7=SE, 8=STAY
 
-    // Convert continuous output to discrete movement
-    int dx = 0, dy = 0;
-    if (output[0] > 0.1) dx = 1;
-    else if (output[0] < -0.1) dx = -1;
+    // Find the highest output (argmax)
+    int bestAction = 0;
+    double bestValue = output[0];
+    for (int i = 1; i < 9; i++) {
+        if (output[i] > bestValue) {
+            bestValue = output[i];
+            bestAction = i;
+        }
+    }
 
-    if (output[1] > 0.1) dy = 1;
-    else if (output[1] < -0.1) dy = -1;
+    // Convert action to movement
+    const int dx_actions[] = {-1, 0, 1, -1, 1, -1, 0, 1, 0};  // NW, N, NE, W, E, SW, S, SE, STAY
+    const int dy_actions[] = {-1, -1, -1, 0, 0, 1, 1, 1, 0};
 
-    // Try to move
+    int dx = dx_actions[bestAction];
+    int dy = dy_actions[bestAction];
+
+    // Try to move (unless STAY)
     if (dx != 0 || dy != 0) {
         move(dx, dy, matrix);
     }

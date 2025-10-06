@@ -60,16 +60,28 @@ void TerminalMatrix::clear(const std::string& fillChar) {
 }
 
 void TerminalMatrix::margin(const std::string& borderChar) {
-    // Draw only top and bottom borders (no side walls)
+    // Draw top and bottom borders
     for (int x = 0; x < width; x++) {
-        setChar(x, 0, borderChar);  // First line after dashboard
-        setChar(x, getHeight() - 1, borderChar);  // Last line
+        setChar(x, 0, borderChar);  // Top border
+        setChar(x, getHeight() - 1, borderChar);  // Bottom border
 
         // Mark as non-walkable obstacles
         Tile* topTile = getTile(x, 0);
         Tile* bottomTile = getTile(x, getHeight() - 1);
         if (topTile) topTile->setWalkable(false);
         if (bottomTile) bottomTile->setWalkable(false);
+    }
+
+    // Draw left and right borders
+    for (int y = 0; y < getHeight(); y++) {
+        setChar(0, y, borderChar);  // Left border
+        setChar(width - 1, y, borderChar);  // Right border
+
+        // Mark as non-walkable obstacles
+        Tile* leftTile = getTile(0, y);
+        Tile* rightTile = getTile(width - 1, y);
+        if (leftTile) leftTile->setWalkable(false);
+        if (rightTile) rightTile->setWalkable(false);
     }
 }
 
@@ -87,18 +99,23 @@ void TerminalMatrix::render() const {
             const Tile& tile = matrix[y][x];
             std::string ch;
 
-            // Check if this is a border tile (top or bottom row)
+            // Check if this is a border tile (top, bottom, left, or right)
             bool isTopBorder = (y == dashboardHeight);
             bool isBottomBorder = (y == height - 1);
-            bool isBorder = isTopBorder || isBottomBorder;
+            bool isLeftBorder = (x == 0);
+            bool isRightBorder = (x == width - 1);
+            bool isBorder = isTopBorder || isBottomBorder || isLeftBorder || isRightBorder;
 
             if (isBorder && !tile.isWalkable()) {
                 // Animated border: alternating pattern ⬛⬜⬛⬜
                 bool useBlack;
                 if (wallAnimationState) {
-                    useBlack = (x % 2 == 0);  // Even positions: black
+                    // For horizontal borders use x, for vertical use y
+                    int pos = (isLeftBorder || isRightBorder) ? y : x;
+                    useBlack = (pos % 2 == 0);  // Even positions: black
                 } else {
-                    useBlack = (x % 2 == 1);  // Odd positions: black (swapped)
+                    int pos = (isLeftBorder || isRightBorder) ? y : x;
+                    useBlack = (pos % 2 == 1);  // Odd positions: black (swapped)
                 }
                 ch = useBlack ? "⬛" : "⬜";
             } else if (type_view) {

@@ -20,7 +20,7 @@ int main() {
     std::vector<double> bestWeights;
     std::cout << "Checking for saved brain...\n";
     try {
-        NeuralNetwork tempBrain({32, 16, 8, 3});  // Same architecture as rodents
+        NeuralNetwork tempBrain({9, 16, 9});  // Same architecture as rodents
         if (tempBrain.loadFromFile("best_brain.dat")) {
             bestWeights = tempBrain.getWeights();
             std::cout << "[✓] Loaded best brain from previous run - " << bestWeights.size() << " weights\n";
@@ -66,7 +66,8 @@ int main() {
     getmaxyx(stdscr, max_y, max_x);
 
     // Create terminal matrix with dashboard line for stats
-    TerminalMatrix matrix(max_x, max_y, 1);
+    // Divide max_x by 2 since emojis take 2 columns each
+    TerminalMatrix matrix(max_x / 2, max_y, 1);
 
     // Load config from YAML
     TerrainConfig::Ratios config = TerrainConfig::loadConfig();
@@ -213,6 +214,14 @@ int main() {
                << " | Avg Energy: " << std::fixed << std::setprecision(1) << stats.avgEnergy
                << " | Best Fit: " << std::fixed << std::setprecision(1) << stats.bestFitness;
             matrix.setDashboard(ss.str());
+
+            // Update window title with animal counts and tick
+            std::stringstream titleStream;
+            titleStream << "Cursed World Evolution | Gen: " << stats.generation
+                       << " | Tick: " << stats.tick
+                       << " | Mice: " << stats.alive
+                       << " | Cats: " << popManager.getCatCount();
+            matrix.setWindowTitle(titleStream.str());
 
             matrix.render();
 
