@@ -171,7 +171,7 @@ int main() {
     matrix.render();
 
     // Display mode flags
-    bool paused = true;  // Start paused
+    bool paused = false;  // Start unpaused
 
     // Wall animation timer
     auto lastWallToggle = std::chrono::high_resolution_clock::now();

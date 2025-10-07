@@ -266,7 +266,19 @@ void PopulationManager::evolveCats(TerminalMatrix& matrix) {
         parents.push_back(std::move(cats[i]));
     }
 
-    // Clear old cats
+    // Place skulls for removed cats (bottom 50%)
+    for (int i = parentsCount; i < cats.size(); i++) {
+        if (cats[i]) {
+            Tile* tile = matrix.getTile(cats[i]->getX(), cats[i]->getY());
+            if (tile && tile->getActuator() == cats[i].get()) {
+                tile->setActuator(nullptr);
+                tile->setChar("💀");  // Skull marker for removed cat
+                tile->setWalkable(false);  // Skulls are obstacles
+            }
+        }
+    }
+
+    // Clear old cats (including parents, which will be re-added below)
     for (auto& cat : cats) {
         if (cat) {
             Tile* tile = matrix.getTile(cat->getX(), cat->getY());
@@ -350,11 +362,11 @@ void PopulationManager::evolveGeneration(TerminalMatrix& matrix) {
     // Evolve cats alongside rodents
     evolveCats(matrix);
 
-    // Clear all tombstones from the map
+    // Clear all tombstones and skulls from the map
     for (int y = 0; y < matrix.getHeight(); y++) {
         for (int x = 0; x < matrix.getWidth(); x++) {
             Tile* tile = matrix.getTile(x, y);
-            if (tile && tile->getChar() == "🪦") {
+            if (tile && (tile->getChar() == "🪦" || tile->getChar() == "💀")) {
                 tile->setChar("  ");  // Reset to empty
                 tile->setWalkable(true);  // Make walkable again
                 tile->setTerrainType(TerrainType::EMPTY);

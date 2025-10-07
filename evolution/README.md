@@ -192,7 +192,7 @@ make
 ./cursed_world
 ```
 
-The simulation starts paused. Press `SPACE` to begin.
+The simulation starts automatically. Press `SPACE` to pause/unpause.
 
 ### Clean
 
