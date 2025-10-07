@@ -272,7 +272,7 @@ void PopulationManager::evolveCats(TerminalMatrix& matrix) {
             Tile* tile = matrix.getTile(cats[i]->getX(), cats[i]->getY());
             if (tile && tile->getActuator() == cats[i].get()) {
                 tile->setActuator(nullptr);
-                tile->setChar("💀");  // Skull marker for removed cat
+                tile->setChar("☠ ");  // Skull marker for removed cat (with space for width)
                 tile->setWalkable(false);  // Skulls are obstacles
             }
         }
@@ -366,7 +366,7 @@ void PopulationManager::evolveGeneration(TerminalMatrix& matrix) {
     for (int y = 0; y < matrix.getHeight(); y++) {
         for (int x = 0; x < matrix.getWidth(); x++) {
             Tile* tile = matrix.getTile(x, y);
-            if (tile && (tile->getChar() == "🪦" || tile->getChar() == "💀")) {
+            if (tile && (tile->getChar() == "🪦" || tile->getChar() == "☠ ")) {
                 tile->setChar("  ");  // Reset to empty
                 tile->setWalkable(true);  // Make walkable again
                 tile->setTerrainType(TerrainType::EMPTY);
