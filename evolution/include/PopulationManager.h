@@ -27,8 +27,8 @@ public:
     // Initialize with random rodents (optional: clone from best weights)
     void initializePopulation(int count, TerminalMatrix& matrix, const std::vector<double>& bestWeights = {});
 
-    // Initialize cats
-    void initializeCats(int count, TerminalMatrix& matrix);
+    // Initialize cats (optional: clone from best weights)
+    void initializeCats(int count, TerminalMatrix& matrix, const std::vector<double>& bestWeights = {});
 
     // Update all rodents and cats
     void update(TerminalMatrix& matrix);
@@ -42,8 +42,11 @@ public:
     // Manage cat population (respawn when they eat or die)
     void manageCats(TerminalMatrix& matrix);
 
-    // Evolution: select best rodents and create new generation
+    // Evolution: select best rodents and cats, create new generation
     void evolveGeneration(TerminalMatrix& matrix);
+
+    // Cat evolution
+    void evolveCats(TerminalMatrix& matrix);
 
     // Getters
     int getPopulationSize() const { return population.size(); }
@@ -54,6 +57,7 @@ public:
     int getCurrentTick() const { return currentTick; }
     int getGenerationLength() const { return generationLength; }
     Rodent* getBestRodent() const;
+    Cat* getBestCat() const;
     int getCatCount() const { return cats.size(); }
 
     // Get population stats
@@ -66,6 +70,9 @@ public:
         double bestFitness;
         int generation;
         int tick;
+        int catCount;
+        double bestCatFitness;
+        int totalRodentsEaten;
     };
     Stats getStats() const;
 };

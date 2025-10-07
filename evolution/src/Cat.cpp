@@ -4,15 +4,25 @@
 #include <cmath>
 #include <random>
 
-Cat::Cat(int posX, int posY, const std::string& c)
+int Cat::nextId = 0;
+
+Cat::Cat(int posX, int posY, const std::string& c, const std::vector<double>& weights)
     : Actuator(posX, posY, c, ActuatorType::CAT), age(0), rodentsEaten(0),
-      eatCooldown(0), moveCooldown(0), patrolDirection(0) {
+      eatCooldown(0), moveCooldown(0), patrolDirection(0), alive(true),
+      brain({10, 16, 9}), id(nextId++) {  // 10 inputs, 16 hidden, 9 outputs
 
     // Random starting patrol direction
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> dir_dist(0, 3);
     patrolDirection = dir_dist(gen);
+
+    // Initialize brain with provided weights or random
+    if (!weights.empty()) {
+        brain.setWeights(weights);
+    } else {
+        brain.randomize(-1.0, 1.0);
+    }
 }
 
 bool Cat::findClosestRodent(TerminalMatrix& matrix, int& outDx, int& outDy) {
@@ -140,7 +150,63 @@ bool Cat::tryEatRodent(TerminalMatrix& matrix) {
     return false;
 }
 
+std::vector<double> Cat::getSurroundingInfo(TerminalMatrix& matrix) {
+    std::vector<double> input;
+    input.reserve(10);  // 8 surrounding + rodentsEaten + eatCooldown
+
+    // Encode 8 surrounding tiles (NW, N, NE, W, E, SW, S, SE)
+    const int dx[] = {-1, 0, 1, -1, 1, -1, 0, 1};
+    const int dy[] = {-1, -1, -1, 0, 0, 1, 1, 1};
+
+    for (int i = 0; i < 8; i++) {
+        int checkX = getX() + dx[i];
+        int checkY = getY() + dy[i];
+        Tile* tile = matrix.getTile(checkX, checkY);
+
+        double value = 0.0;  // Empty by default
+
+        if (!tile) {
+            // Out of bounds
+            value = 7.0;
+        } else if (tile->hasActuator()) {
+            Actuator* act = tile->getActuator();
+            if (act && act->getType() == ActuatorType::RODENT) {
+                Rodent* rodent = static_cast<Rodent*>(act);
+                if (rodent->isAlive()) {
+                    value = 6.0;  // Rodent (prey!)
+                }
+            } else if (act && act->getType() == ActuatorType::CAT) {
+                value = 8.0;  // Another cat (avoid)
+            }
+        } else {
+            // Check terrain type
+            TerrainType terrain = tile->getTerrainType();
+            switch (terrain) {
+                case TerrainType::EMPTY: value = 0.0; break;
+                case TerrainType::PLANTS: value = 1.0; break;
+                case TerrainType::SEEDLINGS: value = 2.0; break;
+                case TerrainType::DEAD_TREES: value = 3.0; break;
+                case TerrainType::ROCKS: value = 4.0; break;
+                case TerrainType::SEED: value = 5.0; break;
+                default: value = 0.0; break;
+            }
+        }
+
+        input.push_back(value / 8.0);  // Normalize to 0-1 range
+    }
+
+    // Add rodents eaten (normalized to 0-1, assuming max ~20 per generation)
+    input.push_back(std::min(rodentsEaten / 20.0, 1.0));
+
+    // Add eat cooldown (normalized to 0-1, max 30 ticks)
+    input.push_back(eatCooldown / 30.0);
+
+    return input;
+}
+
 void Cat::update(TerminalMatrix& matrix) {
+    if (!alive) return;
+
     age++;
 
     // Decrease cooldowns
@@ -158,31 +224,33 @@ void Cat::update(TerminalMatrix& matrix) {
         return;  // Still on cooldown, skip movement
     }
 
-    // AI: Look for rodents, chase if found, else patrol
+    // Use neural network to decide movement
+    std::vector<double> input = getSurroundingInfo(matrix);
+    std::vector<double> output = brain.forward(input);
+
+    // Find the best action (argmax)
+    int bestAction = 0;
+    double bestValue = output[0];
+    for (int i = 1; i < output.size(); i++) {
+        if (output[i] > bestValue) {
+            bestValue = output[i];
+            bestAction = i;
+        }
+    }
+
+    // Map action to movement (8 directions + stay)
+    // 0=NW, 1=N, 2=NE, 3=W, 4=E, 5=SW, 6=S, 7=SE, 8=Stay
     int dx = 0, dy = 0;
-
-    if (findClosestRodent(matrix, dx, dy)) {
-        // Found a rodent - chase it!
-        // Movement already set by findClosestRodent
-    } else {
-        // No rodent nearby - patrol pattern
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<> change_dir(0, 9);
-
-        // 10% chance to change patrol direction
-        if (change_dir(gen) == 0) {
-            std::uniform_int_distribution<> new_dir(0, 3);
-            patrolDirection = new_dir(gen);
-        }
-
-        // Move in patrol direction: 0=N, 1=E, 2=S, 3=W
-        switch(patrolDirection) {
-            case 0: dy = -1; break;  // North
-            case 1: dx = 1; break;   // East
-            case 2: dy = 1; break;   // South
-            case 3: dx = -1; break;  // West
-        }
+    switch(bestAction) {
+        case 0: dx = -1; dy = -1; break;  // NW
+        case 1: dx = 0; dy = -1; break;   // N
+        case 2: dx = 1; dy = -1; break;   // NE
+        case 3: dx = -1; dy = 0; break;   // W
+        case 4: dx = 1; dy = 0; break;    // E
+        case 5: dx = -1; dy = 1; break;   // SW
+        case 6: dx = 0; dy = 1; break;    // S
+        case 7: dx = 1; dy = 1; break;    // SE
+        case 8: dx = 0; dy = 0; break;    // Stay
     }
 
     // Try to move
@@ -191,6 +259,25 @@ void Cat::update(TerminalMatrix& matrix) {
         if (moved) {
             moveCooldown = 0;  // Same speed as mice (no cooldown)
         }
-        // If movement failed, no cooldown - try again next tick with new direction
     }
+}
+
+Cat* Cat::reproduce(int posX, int posY) {
+    // Create offspring with mutated brain
+    std::vector<double> childWeights = brain.getWeights();
+
+    // Mutate 5% of weights with ±0.3 adjustment
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<> mutation_chance(0.0, 1.0);
+    std::uniform_real_distribution<> mutation_amount(-0.3, 0.3);
+
+    for (double& weight : childWeights) {
+        if (mutation_chance(gen) < 0.05) {  // 5% mutation rate
+            weight += mutation_amount(gen);
+        }
+    }
+
+    Cat* child = new Cat(posX, posY, "🐈", childWeights);
+    return child;
 }

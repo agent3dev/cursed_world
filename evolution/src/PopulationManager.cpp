@@ -60,7 +60,7 @@ void PopulationManager::initializePopulation(int count, TerminalMatrix& matrix, 
     }
 }
 
-void PopulationManager::initializeCats(int count, TerminalMatrix& matrix) {
+void PopulationManager::initializeCats(int count, TerminalMatrix& matrix, const std::vector<double>& bestWeights) {
     std::random_device rd;
     std::mt19937 gen(rd());
     auto x_dist = safeXDist(matrix);
@@ -81,8 +81,14 @@ void PopulationManager::initializeCats(int count, TerminalMatrix& matrix) {
         }
 
         if (tile && tile->isWalkable() && !tile->hasActuator()) {
-            // Cats use hardcoded AI, no neural network
-            auto cat = std::make_unique<Cat>(x, y, "🐈");
+            // Create cat with best weights if available, otherwise random
+            auto cat = std::make_unique<Cat>(x, y, "🐈", bestWeights);
+
+            // Add some mutation if using best weights (for diversity)
+            if (!bestWeights.empty()) {
+                cat->getBrain().mutate(0.2, 0.3);  // 20% mutation rate for initial diversity
+            }
+
             tile->setActuator(cat.get());
             cats.push_back(std::move(cat));
         }
@@ -127,53 +133,8 @@ void PopulationManager::update(TerminalMatrix& matrix) {
         cat->update(matrix);
     }
 
-    // Check if any cat has eaten 10 mice - collect them first (don't modify vector during iteration)
-    // Cap cat population at 20 to prevent exponential growth
-    const int MAX_TOTAL_CATS = 20;
-    std::vector<std::unique_ptr<Cat>> newCats;
-
-    for (auto& cat : cats) {
-        // Stop spawning if we're at or over the limit
-        if (cats.size() + newCats.size() >= static_cast<size_t>(MAX_TOTAL_CATS)) {
-            break;
-        }
-
-        if (cat->getRodentsEaten() >= 10) {
-            // Reset this cat's counter
-            cat->resetRodentsEaten();
-
-            // Prepare to spawn a new cat
-            std::random_device rd;
-            std::mt19937 gen(rd());
-            std::uniform_int_distribution<> x_dist(1, matrix.getWidth() - 2);
-            std::uniform_int_distribution<> y_dist(1, matrix.getHeight() - 2);
-
-            int x = x_dist(gen);
-            int y = y_dist(gen);
-            Tile* tile = matrix.getTile(x, y);
-
-            int attempts = 0;
-            while ((!tile || !tile->isWalkable() || tile->hasActuator()) && attempts < 50) {
-                x = x_dist(gen);
-                y = y_dist(gen);
-                tile = matrix.getTile(x, y);
-                attempts++;
-            }
-
-            if (tile && tile->isWalkable() && !tile->hasActuator()) {
-                auto newCat = std::make_unique<Cat>(x, y, "🐈");
-                tile->setActuator(newCat.get());
-                newCats.push_back(std::move(newCat));
-            }
-        }
-    }
-
-    // Add new cats after iteration is complete (up to the limit)
-    for (auto& newCat : newCats) {
-        if (cats.size() < static_cast<size_t>(MAX_TOTAL_CATS)) {
-            cats.push_back(std::move(newCat));
-        }
-    }
+    // Cats no longer reproduce mid-generation - they evolve between generations
+    // This allows for proper fitness evaluation and selection pressure
 
     // Update all rodents
     for (auto& rodent : population) {
@@ -290,8 +251,104 @@ void PopulationManager::removeDeadRodents(TerminalMatrix& matrix) {
     // Don't respawn mice - let the generation play out naturally
 }
 
+void PopulationManager::evolveCats(TerminalMatrix& matrix) {
+    // Sort cats by fitness
+    std::sort(cats.begin(), cats.end(),
+        [](const std::unique_ptr<Cat>& a, const std::unique_ptr<Cat>& b) {
+            return a->getFitness() > b->getFitness();
+        });
+
+    // Keep top 50% as parents (more selective than rodents)
+    int parentsCount = std::max(2, static_cast<int>(cats.size() * 0.5));
+    std::vector<std::unique_ptr<Cat>> parents;
+
+    for (int i = 0; i < parentsCount && i < cats.size(); i++) {
+        parents.push_back(std::move(cats[i]));
+    }
+
+    // Clear old cats
+    for (auto& cat : cats) {
+        if (cat) {
+            Tile* tile = matrix.getTile(cat->getX(), cat->getY());
+            if (tile && tile->getActuator() == cat.get()) {
+                tile->setActuator(nullptr);
+            }
+        }
+    }
+    cats.clear();
+
+    // Create new generation from parents
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    auto x_dist = safeXDist(matrix);
+    auto y_dist = safeYDist(matrix);
+
+    // Add parents back with reset positions
+    for (auto& parent : parents) {
+        int x = x_dist(gen);
+        int y = y_dist(gen);
+        Tile* tile = matrix.getTile(x, y);
+
+        int attempts = 0;
+        while ((!tile || !tile->isWalkable() || tile->hasActuator()) && attempts < 100) {
+            x = x_dist(gen);
+            y = y_dist(gen);
+            tile = matrix.getTile(x, y);
+            attempts++;
+        }
+
+        if (!tile || !tile->isWalkable() || tile->hasActuator()) {
+            continue;
+        }
+
+        parent->setPosition(x, y);
+        parent->resetRodentsEaten();  // Reset kill counter
+        parent->resetMemory();  // Reset recurrent memory
+        tile->setActuator(parent.get());
+        cats.push_back(std::move(parent));
+    }
+
+    // Create offspring from parents to reach initial cat count
+    int targetCats = maxCats;
+    int offspringCount = targetCats - cats.size();
+
+    if (offspringCount < 0) offspringCount = 0;
+    if (cats.empty()) return;  // Can't create offspring without parents
+
+    std::uniform_int_distribution<> parent_dist(0, cats.size() - 1);
+
+    for (int i = 0; i < offspringCount && cats.size() < static_cast<size_t>(maxCats); i++) {
+        int parentIdx = parent_dist(gen);
+        std::vector<double> parentWeights = cats[parentIdx]->getBrain().getWeights();
+
+        int x = x_dist(gen);
+        int y = y_dist(gen);
+        Tile* tile = matrix.getTile(x, y);
+
+        int attempts = 0;
+        while ((!tile || !tile->isWalkable() || tile->hasActuator()) && attempts < 100) {
+            x = x_dist(gen);
+            y = y_dist(gen);
+            tile = matrix.getTile(x, y);
+            attempts++;
+        }
+
+        if (!tile || !tile->isWalkable() || tile->hasActuator()) {
+            continue;
+        }
+
+        auto offspring = std::make_unique<Cat>(x, y, "🐈", parentWeights);
+        offspring->getBrain().mutate(0.15, 0.4);  // 15% mutation rate for cats
+        tile->setActuator(offspring.get());
+        cats.push_back(std::move(offspring));
+    }
+}
+
 void PopulationManager::evolveGeneration(TerminalMatrix& matrix) {
     generation++;
+
+    // Evolve cats alongside rodents
+    evolveCats(matrix);
 
     // Clear all tombstones from the map
     for (int y = 0; y < matrix.getHeight(); y++) {
@@ -477,6 +534,18 @@ PopulationManager::Stats PopulationManager::getStats() const {
     stats.avgFitness = population.size() > 0 ? totalFitness / population.size() : 0.0;
     stats.bestFitness = bestFit;
 
+    // Cat statistics
+    stats.catCount = cats.size();
+    stats.bestCatFitness = 0.0;
+    stats.totalRodentsEaten = 0;
+
+    for (const auto& cat : cats) {
+        stats.totalRodentsEaten += cat->getRodentsEaten();
+        if (cat->getFitness() > stats.bestCatFitness) {
+            stats.bestCatFitness = cat->getFitness();
+        }
+    }
+
     return stats;
 }
 
@@ -490,6 +559,22 @@ Rodent* PopulationManager::getBestRodent() const {
         if (rodent->getFitness() > bestFitness) {
             bestFitness = rodent->getFitness();
             best = rodent.get();
+        }
+    }
+
+    return best;
+}
+
+Cat* PopulationManager::getBestCat() const {
+    if (cats.empty()) return nullptr;
+
+    Cat* best = nullptr;
+    double bestFitness = 0.0;
+
+    for (const auto& cat : cats) {
+        if (cat->getFitness() > bestFitness) {
+            bestFitness = cat->getFitness();
+            best = cat.get();
         }
     }
 

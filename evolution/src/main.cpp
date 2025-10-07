@@ -16,23 +16,42 @@
 int main() {
     std::cout << "Starting Cursed World...\n";
 
-    // Try to load best brain from previous run BEFORE ncurses
-    std::vector<double> bestWeights;
-    std::cout << "Checking for saved brain...\n";
+    // Try to load best mouse brain from previous run BEFORE ncurses
+    std::vector<double> bestMouseWeights;
+    std::cout << "Checking for saved mouse brain...\n";
     try {
         NeuralNetwork tempBrain({9, 16, 9});  // Same architecture as rodents
         if (tempBrain.loadFromFile("best_brain.dat")) {
-            bestWeights = tempBrain.getWeights();
-            std::cout << "[✓] Loaded best brain from previous run - " << bestWeights.size() << " weights\n";
+            bestMouseWeights = tempBrain.getWeights();
+            std::cout << "[✓] Loaded best mouse brain from previous run - " << bestMouseWeights.size() << " weights\n";
         } else {
-            std::cout << "[!] No compatible brain file found - starting fresh\n";
+            std::cout << "[!] No compatible mouse brain file found - starting fresh\n";
         }
     } catch (const std::exception& e) {
-        std::cout << "[!] Failed to load best brain: " << e.what() << " - starting fresh\n";
-        bestWeights.clear();
+        std::cout << "[!] Failed to load best mouse brain: " << e.what() << " - starting fresh\n";
+        bestMouseWeights.clear();
     } catch (...) {
-        std::cout << "[!] Failed to load best brain - starting fresh\n";
-        bestWeights.clear();
+        std::cout << "[!] Failed to load best mouse brain - starting fresh\n";
+        bestMouseWeights.clear();
+    }
+
+    // Try to load best cat brain from previous run
+    std::vector<double> bestCatWeights;
+    std::cout << "Checking for saved cat brain...\n";
+    try {
+        NeuralNetwork tempCatBrain({10, 16, 9});  // Cat architecture: 10 inputs, 16 hidden, 9 outputs
+        if (tempCatBrain.loadFromFile("best_cat_brain.dat")) {
+            bestCatWeights = tempCatBrain.getWeights();
+            std::cout << "[✓] Loaded best cat brain from previous run - " << bestCatWeights.size() << " weights\n";
+        } else {
+            std::cout << "[!] No compatible cat brain file found - starting fresh\n";
+        }
+    } catch (const std::exception& e) {
+        std::cout << "[!] Failed to load best cat brain: " << e.what() << " - starting fresh\n";
+        bestCatWeights.clear();
+    } catch (...) {
+        std::cout << "[!] Failed to load best cat brain - starting fresh\n";
+        bestCatWeights.clear();
     }
 
     // Start timing
@@ -136,8 +155,8 @@ int main() {
     PopulationManager popManager(150, 2000, 5);  // Max 150 rodents, 2000 ticks per generation, 5 cats
 
     // Use the brain weights loaded earlier
-    popManager.initializePopulation(100, matrix, bestWeights);  // Start with 100 rodents
-    popManager.initializeCats(5, matrix);  // Start with 5 cats
+    popManager.initializePopulation(100, matrix, bestMouseWeights);  // Start with 100 rodents
+    popManager.initializeCats(5, matrix, bestCatWeights);  // Start with 5 cats
 
     // Create player-controlled ghost in the center
     int ghostX = matrix.getWidth() / 2;
@@ -246,7 +265,15 @@ int main() {
     Rodent* bestRodent = popManager.getBestRodent();
     if (bestRodent) {
         if (bestRodent->getBrain().saveToFile("best_brain.dat")) {
-            std::cout << "\n[Saved best brain to best_brain.dat]\n";
+            std::cout << "\n[✓] Saved best mouse brain to best_brain.dat\n";
+        }
+    }
+
+    // Save best cat's brain
+    Cat* bestCat = popManager.getBestCat();
+    if (bestCat) {
+        if (bestCat->getBrain().saveToFile("best_cat_brain.dat")) {
+            std::cout << "[✓] Saved best cat brain to best_cat_brain.dat\n";
         }
     }
 
@@ -257,14 +284,18 @@ int main() {
     std::cout << "\n=== CURSED WORLD EVOLUTION SUMMARY ===\n";
     std::cout << "Final Generation: " << finalStats.generation << "\n";
     std::cout << "Final Tick: " << finalStats.tick << "\n";
-    std::cout << "Population:\n";
+    std::cout << "Mouse Population:\n";
     std::cout << "  - Alive: " << finalStats.alive << "\n";
     std::cout << "  - Total Deaths: " << finalStats.totalDeaths << "\n";
     std::cout << "  - Current Total: " << (finalStats.alive + finalStats.dead) << "\n";
-    std::cout << "Performance:\n";
+    std::cout << "Mouse Performance:\n";
     std::cout << "  - Average Energy: " << std::fixed << std::setprecision(2) << finalStats.avgEnergy << "\n";
     std::cout << "  - Average Fitness: " << std::fixed << std::setprecision(2) << finalStats.avgFitness << "\n";
     std::cout << "  - Best Fitness: " << std::fixed << std::setprecision(2) << finalStats.bestFitness << "\n";
+    std::cout << "Cat Statistics:\n";
+    std::cout << "  - Total Cats: " << finalStats.catCount << "\n";
+    std::cout << "  - Total Mice Eaten: " << finalStats.totalRodentsEaten << "\n";
+    std::cout << "  - Best Cat Fitness: " << std::fixed << std::setprecision(2) << finalStats.bestCatFitness << "\n";
     std::cout << "======================================\n\n";
 
     return 0;

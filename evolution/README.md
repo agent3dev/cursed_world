@@ -9,16 +9,19 @@ A terminal-based evolutionary simulation where AI-controlled mice learn to survi
 
 Cursed World is an evolutionary simulation featuring:
 - **Recurrent Neural Network Mice**: Each mouse has a brain (9→16→9 RNN) with memory that evolves through generations
-- **Genetic Algorithm**: The fittest mice survive and pass on their genes with mutations
+- **Evolving Cat Predators**: Cats with neural networks (10→16→9) that co-evolve alongside mice
+- **Genetic Algorithm**: The fittest mice and cats survive and pass on their genes with mutations
 - **Predator-Prey Dynamics**: Cats hunt mice at equal speed, creating survival pressure
-- **Real-time Evolution**: Watch mice learn optimal strategies over generations
-- **Persistent Learning**: Save/load the best brain between sessions
+- **Real-time Evolution**: Watch both species learn optimal strategies over generations
+- **Persistent Learning**: Save/load the best brains for both species between sessions
 - **Ecosystem Dynamics**: Plant regrowth system with seed dispersal
 - **Debug Logging**: Track every death with detailed statistics
 
 ## Features
 
 ### 🧠 Recurrent Neural Network Architecture
+
+#### Mouse Brain (9→16→9 RNN)
 
 **Inputs (9):**
 - 8 surrounding tiles encoded as terrain type:
@@ -41,6 +44,28 @@ Cursed World is an evolutionary simulation featuring:
 - 8 directional movements (NW, N, NE, W, E, SW, S, SE)
 - Stay in place
 - Uses argmax to select the highest-valued action
+
+#### Cat Brain (10→16→9 RNN)
+
+**Inputs (10):**
+- 8 surrounding tiles encoded as terrain type:
+  - `0` = Empty space
+  - `1` = Plants
+  - `2` = Seedlings
+  - `3` = Dead trees
+  - `4` = Rocks
+  - `5` = Seeds
+  - `6` = Rodent (prey!)
+  - `7` = Wall/out of bounds
+  - `8` = Other cats (avoid)
+- Rodents eaten count (normalized to 0-1)
+- Eat cooldown status (normalized 0-1)
+
+**Hidden Layer:** 16 neurons with recurrent connections
+
+**Outputs (9):**
+- Same as mouse: 8 directions + stay
+- Learns hunting patterns and patrol strategies
 
 ### 🌱 Terrain & Ecosystem System
 
@@ -72,33 +97,55 @@ Mice learn to:
 fitness = (food_eaten × 10) + (age × 0.1)
 ```
 
-### 🐈 Cat Behavior
+### 🐈 Cat AI Behavior
 
-- **Chase nearest mouse** within 7-tile radius
-- **Enter mouse tiles** to kill them instantly
-- **Patrol randomly** when no mice nearby
-- **Reproduce** after eating 10 mice (max 20 cats)
+Cats learn to:
+- **Hunt efficiently** by tracking and chasing mice
+- **Navigate around obstacles** and terrain
+- **Coordinate movements** to avoid other cats
+- **Optimize kill timing** with eat cooldown management
+- **Develop patrol strategies** when no prey is nearby
+
+**Mechanics:**
+- **Neural Network Controlled**: Cats use their brain to decide movement
+- **Vision Range**: Can see 3 tiles in all directions (7x7 area)
+- **Kill Instantly**: Entering a mouse tile kills it
+- **Eat Cooldown**: 30 ticks between kills
 - **Move at same speed** as mice (creating strong selection pressure)
-- **Eat cooldown**: 30 ticks between kills
+- **Never die**: Only evolve between generations
+
+**Fitness Function:**
+```
+fitness = (rodents_eaten × 100) + (age × 0.1)
+```
+
+**Evolution:**
+- Top 50% of cats selected as parents each generation
+- Offspring created with 15% mutation rate (±0.4 adjustment)
+- Population maintained at 3 cats (configurable)
+- Memory reset between generations
 
 ### 🧬 Evolution System
 
 **Generation Cycle:**
 1. Run for 2000 ticks or until all mice die (no respawning)
-2. Sort mice by fitness
-3. Keep top 20% as parents
-4. Create offspring with 10% mutation rate (±0.5 weight adjustment)
-5. Reset to 80 mice for next generation
-6. Clear all tombstones at generation start
+2. Sort both mice and cats by fitness
+3. **Mice**: Keep top 20% as parents
+4. **Cats**: Keep top 50% as parents
+5. Create offspring with mutation for both species
+6. Reset to 80 mice and 3 cats for next generation
+7. Clear all tombstones and reset positions
 
 **Brain Persistence:**
-- Best brain automatically saved to `best_brain.dat` on exit
-- Loaded on startup for continuous evolution across sessions
+- Best mouse brain saved to `best_brain.dat` on exit
+- Best cat brain saved to `best_cat_brain.dat` on exit
+- Both loaded on startup for continuous evolution across sessions
 - Includes recurrent weights for memory
 
-**Mutation:**
-- Live reproduction: 5% rate, ±0.3 adjustment
-- Generation evolution: 10% rate, ±0.5 adjustment
+**Mutation Rates:**
+- **Mice** live reproduction: 5% rate, ±0.3 adjustment
+- **Mice** generation evolution: 10% rate, ±0.5 adjustment
+- **Cats** generation evolution: 15% rate, ±0.4 adjustment
 
 ### 👻 Player Ghost
 
@@ -200,53 +247,75 @@ cursed_world/
 ├── Tile.h/cpp            # Tile properties and terrain types
 ├── Actuator.h/cpp        # Base class for dynamic entities
 ├── Rodent.h/cpp          # Mouse AI with neural network
-├── Cat.h/cpp             # Cat predator AI
+├── Cat.h/cpp             # Cat predator AI with neural network
 ├── Ghost.h/cpp           # Player-controlled ghost
-├── NeuralNetwork.h/cpp   # Feed-forward neural network
+├── NeuralNetwork.h/cpp   # Recurrent neural network with memory
 ├── PopulationManager.h/cpp # Evolution and population management
 ├── config.h              # YAML configuration loader
 ├── config.yaml           # Terrain distribution settings
 ├── Makefile              # Build configuration
-├── best_brain.dat        # Saved neural network weights (generated)
+├── best_brain.dat        # Saved mouse neural network (generated)
+├── best_cat_brain.dat    # Saved cat neural network (generated)
+├── death_log.txt         # Death statistics CSV (generated)
 └── README.md
 ```
 
 ## How It Works
 
-### Neural Network
+### Neural Networks
 
-Each mouse has a fully-connected feed-forward neural network:
+**Mice** have a recurrent neural network:
 - **Layer 1**: 9 inputs → 16 neurons (tanh activation)
+- **Recurrent**: 16×16 hidden state matrix (memory)
 - **Layer 2**: 16 neurons → 9 outputs (tanh activation)
 - **Decision**: Argmax selects the highest output
 
-### Evolution
+**Cats** have a recurrent neural network:
+- **Layer 1**: 10 inputs → 16 neurons (tanh activation)
+- **Recurrent**: 16×16 hidden state matrix (memory)
+- **Layer 2**: 16 neurons → 9 outputs (tanh activation)
+- **Decision**: Argmax selects the highest output
 
-1. **Initialization**: 100 mice spawn with random brain weights
-2. **Simulation**: Mice move, eat, reproduce, and die for 2000 ticks
-3. **Selection**: Top 20% survive based on fitness (food eaten + survival time)
-4. **Reproduction**: Survivors create mutated offspring to reach 80 mice
-5. **Repeat**: New generation begins
+### Co-Evolution
+
+1. **Initialization**: 80 mice and 3 cats spawn with random or loaded brain weights
+2. **Simulation**: Both species interact for 2000 ticks
+   - Mice eat food, reproduce, avoid cats, die from starvation or being eaten
+   - Cats hunt mice, accumulate kills, never die mid-generation
+3. **Selection**:
+   - Top 20% of mice survive based on fitness
+   - Top 50% of cats survive based on fitness
+4. **Reproduction**: Both species create mutated offspring
+   - Mice reach 80 population
+   - Cats reach 3 population
+5. **Repeat**: New generation begins with both species evolved
 
 ### Mutation
 
-- **Rate**: 10% of weights are mutated each generation
-- **Amount**: Random adjustment of ±0.5 per mutated weight
-- **Diversity**: Prevents local optima and explores new strategies
+**Mice:**
+- **Live reproduction**: 5% rate, ±0.3 adjustment
+- **Generation evolution**: 10% rate, ±0.5 adjustment
+
+**Cats:**
+- **Generation evolution**: 15% rate, ±0.4 adjustment
+- Higher mutation rate encourages hunting diversity
 
 ## Performance
 
-- **Target**: ~60 FPS with 100 mice and 5-20 cats
-- **Evolution Speed**: Typically sees improvement within 5-10 generations
+- **Target**: ~60 FPS with 80 mice and 3 cats
+- **Evolution Speed**: Typically sees improvement within 5-10 generations for both species
 - **Memory**: Efficient smart pointer management prevents leaks
 
 ## Tips for Training
 
-1. **Start fresh**: Delete `best_brain.dat` to reset evolution
-2. **Let it run**: Evolution takes time—at least 10+ generations
-3. **Watch patterns**: Successful mice cluster near food sources
-4. **Cat pressure**: More cats = stronger selection for evasion
+1. **Start fresh**: Delete `best_brain.dat` and `best_cat_brain.dat` to reset evolution
+2. **Let it run**: Co-evolution takes time—at least 20+ generations for interesting behaviors
+3. **Watch patterns**:
+   - Successful mice cluster near food sources and flee from cats
+   - Successful cats develop patrol patterns and chase strategies
+4. **Cat pressure**: More cats = stronger selection for mouse evasion
 5. **Energy awareness**: Mice should learn to prioritize food when low energy
+6. **Arms race**: As mice evolve better evasion, cats evolve better hunting
 
 ## Troubleshooting
 
