@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <chrono>
 #include <ctime>
+#include <iostream>
 
 // Helper to safely create position distributions
 static std::uniform_int_distribution<> safeXDist(const TerminalMatrix& matrix) {
@@ -252,6 +253,8 @@ void PopulationManager::removeDeadRodents(TerminalMatrix& matrix) {
 }
 
 void PopulationManager::evolveCats(TerminalMatrix& matrix) {
+    std::cout << "[DEBUG Cat Evolution] Starting cat evolution with " << cats.size() << " cats\n";
+
     // Sort cats by fitness
     std::sort(cats.begin(), cats.end(),
         [](const std::unique_ptr<Cat>& a, const std::unique_ptr<Cat>& b) {
@@ -260,6 +263,7 @@ void PopulationManager::evolveCats(TerminalMatrix& matrix) {
 
     // Keep top 50% as parents (more selective than rodents)
     int parentsCount = std::max(2, static_cast<int>(cats.size() * 0.5));
+    std::cout << "[DEBUG Cat Evolution] Keeping " << parentsCount << " parent cats\n";
     std::vector<std::unique_ptr<Cat>> parents;
 
     for (int i = 0; i < parentsCount && i < cats.size(); i++) {
@@ -323,6 +327,7 @@ void PopulationManager::evolveCats(TerminalMatrix& matrix) {
     // Create offspring from parents to reach initial cat count
     int targetCats = maxCats;
     int offspringCount = targetCats - cats.size();
+    std::cout << "[DEBUG Cat Evolution] Creating " << offspringCount << " offspring cats (target: " << targetCats << ")\n";
 
     if (offspringCount < 0) offspringCount = 0;
     if (cats.empty()) return;  // Can't create offspring without parents
@@ -332,6 +337,7 @@ void PopulationManager::evolveCats(TerminalMatrix& matrix) {
     for (int i = 0; i < offspringCount && cats.size() < static_cast<size_t>(maxCats); i++) {
         int parentIdx = parent_dist(gen);
         std::vector<double> parentWeights = cats[parentIdx]->getBrain().getWeights();
+        std::cout << "[DEBUG Cat Evolution] Creating offspring " << i << " from parent " << parentIdx << " with " << parentWeights.size() << " weights\n";
 
         int x = x_dist(gen);
         int y = y_dist(gen);
@@ -346,14 +352,20 @@ void PopulationManager::evolveCats(TerminalMatrix& matrix) {
         }
 
         if (!tile || !tile->isWalkable() || tile->hasActuator()) {
+            std::cout << "[DEBUG Cat Evolution] Failed to find valid position for offspring " << i << "\n";
             continue;
         }
 
-        auto offspring = std::make_unique<Cat>(x, y, "🐈", parentWeights);
-        offspring->getBrain().mutate(0.15, 0.4);  // 15% mutation rate for cats
-        tile->setActuator(offspring.get());
-        cats.push_back(std::move(offspring));
+        try {
+            auto offspring = std::make_unique<Cat>(x, y, "🐈", parentWeights);
+            offspring->getBrain().mutate(0.15, 0.4);  // 15% mutation rate for cats
+            tile->setActuator(offspring.get());
+            cats.push_back(std::move(offspring));
+        } catch (const std::exception& e) {
+            std::cout << "[ERROR Cat Evolution] Failed to create offspring " << i << ": " << e.what() << "\n";
+        }
     }
+    std::cout << "[DEBUG Cat Evolution] Finished. Total cats: " << cats.size() << "\n";
 }
 
 void PopulationManager::evolveGeneration(TerminalMatrix& matrix) {

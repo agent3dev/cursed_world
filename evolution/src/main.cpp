@@ -152,11 +152,14 @@ int main() {
     matrix.setWindowTitle(title);
 
     // Initialize population manager
-    PopulationManager popManager(150, 2000, 5);  // Max 150 rodents, 2000 ticks per generation, 5 cats
+    PopulationManager popManager(50, 2000, 3);  // Max 50 rodents, 2000 ticks per generation, 3 cats
 
+    std::cout << "[DEBUG] Initializing population with 30 mice and 3 cats\n";
     // Use the brain weights loaded earlier
-    popManager.initializePopulation(100, matrix, bestMouseWeights);  // Start with 100 rodents
-    popManager.initializeCats(5, matrix, bestCatWeights);  // Start with 5 cats
+    popManager.initializePopulation(30, matrix, bestMouseWeights);  // Start with 30 rodents
+    std::cout << "[DEBUG] Mice initialized successfully\n";
+    popManager.initializeCats(3, matrix, bestCatWeights);  // Start with 3 cats
+    std::cout << "[DEBUG] Cats initialized successfully\n";
 
     // Create player-controlled ghost in the center
     int ghostX = matrix.getWidth() / 2;

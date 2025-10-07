@@ -3,6 +3,7 @@
 #include "Actuator.h"
 #include <cmath>
 #include <random>
+#include <iostream>
 
 int Cat::nextId = 0;
 
@@ -11,17 +12,21 @@ Cat::Cat(int posX, int posY, const std::string& c, const std::vector<double>& we
       eatCooldown(0), moveCooldown(0), patrolDirection(0), alive(true),
       brain({10, 16, 9}), id(nextId++) {  // 10 inputs, 16 hidden, 9 outputs
 
+    std::cout << "[DEBUG Cat] Creating cat " << id << " at (" << posX << ", " << posY << ")\n";
+
     // Random starting patrol direction
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
     std::uniform_int_distribution<> dir_dist(0, 3);
     patrolDirection = dir_dist(gen);
 
     // Initialize brain with provided weights or random
     if (!weights.empty()) {
         brain.setWeights(weights);
+        std::cout << "[DEBUG Cat] Cat " << id << " initialized with " << weights.size() << " weights\n";
     } else {
         brain.randomize(-1.0, 1.0);
+        std::cout << "[DEBUG Cat] Cat " << id << " initialized with random weights\n";
     }
 }
 
@@ -71,16 +76,16 @@ bool Cat::move(int dx, int dy, TerminalMatrix& matrix) {
     // Don't allow movement beyond screen bounds (no side walls, but also no offscreen)
     if (newX < 0 || newX >= matrix.getWidth() || newY < 0 || newY >= matrix.getHeight()) {
         // Hit edge - change patrol direction
-        std::random_device rd;
-        std::mt19937 gen(rd());
+        static std::random_device rd;
+        static std::mt19937 gen(rd());
         std::uniform_int_distribution<> new_dir(0, 3);
         patrolDirection = new_dir(gen);
         return false;  // Movement failed
     }
 
-    // Check if new position is valid (cats can walk over rocks and dead trees)
+    // Check if new position is valid and walkable
     Tile* tile = matrix.getTile(newX, newY);
-    if (tile) {
+    if (tile && tile->isWalkable()) {
         // Check if there's a rodent on the target tile - if so, eat it!
         if (tile->hasActuator()) {
             Actuator* act = tile->getActuator();
@@ -98,7 +103,7 @@ bool Cat::move(int dx, int dy, TerminalMatrix& matrix) {
             return false;
         }
 
-        // Tile is empty - move into it
+        // Tile is empty and walkable - move into it
         // Remove actuator from old tile
         Tile* oldTile = matrix.getTile(getX(), getY());
         if (oldTile) {
@@ -110,9 +115,9 @@ bool Cat::move(int dx, int dy, TerminalMatrix& matrix) {
         tile->setActuator(this);
         return true;  // Movement succeeded
     } else {
-        // Invalid tile - change patrol direction
-        std::random_device rd;
-        std::mt19937 gen(rd());
+        // Invalid tile or not walkable (wall/obstacle) - change patrol direction
+        static std::random_device rd;
+        static std::mt19937 gen(rd());
         std::uniform_int_distribution<> new_dir(0, 3);
         patrolDirection = new_dir(gen);
         return false;  // Movement failed
