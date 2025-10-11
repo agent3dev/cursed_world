@@ -1,0 +1,18 @@
+# Claude Code configuration
+.claude/
+
+# Log files
+*.log
+crash.log
+simulation.log
+log.txt
+
+# Build artifacts
+build/
+*.o
+evolution
+
+# Brain data files (optional - uncomment if you don't want to track these)
+# *.dat
+# best_brain.dat
+# best_cat_brain.dat
