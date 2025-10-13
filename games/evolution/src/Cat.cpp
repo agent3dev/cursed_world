@@ -1,6 +1,6 @@
 #include "../include/Cat.h"
 #include "../include/Rodent.h"
-#include "../include/Actuator.h"
+#include "../../common/include/Actuator.h"
 #include <cmath>
 #include <random>
 #include <iostream>
@@ -10,7 +10,7 @@ int Cat::nextId = 0;
 Cat::Cat(int posX, int posY, const char* c, const std::vector<double>& weights)
     : Actuator(posX, posY, c, ActuatorType::CAT), age(0), rodentsEaten(0),
       eatCooldown(0), moveCooldown(0), patrolDirection(0), alive(true),
-      brain({10, 16, 9}), id(nextId++) {  // 10 inputs, 16 hidden, 9 outputs
+      brain({16, 32, 9}), id(nextId++) {  // 16 inputs (10 + smell), 32 hidden, 9 outputs
 
     std::cout << "[DEBUG Cat] Creating cat " << id << " at (" << posX << ", " << posY << ")\n";
 
@@ -157,7 +157,7 @@ bool Cat::tryEatRodent(TerminalMatrix& matrix) {
 
 std::vector<double> Cat::getSurroundingInfo(TerminalMatrix& matrix) {
     std::vector<double> input;
-    input.reserve(10);  // 8 surrounding + rodentsEaten + eatCooldown
+    input.reserve(16);  // 8 surrounding + rodentsEaten + eatCooldown + smell (6)
 
     // Encode 8 surrounding tiles (NW, N, NE, W, E, SW, S, SE)
     const int dx[] = {-1, 0, 1, -1, 1, -1, 0, 1};
@@ -206,7 +206,109 @@ std::vector<double> Cat::getSurroundingInfo(TerminalMatrix& matrix) {
     // Add eat cooldown (normalized to 0-1, max 30 ticks)
     input.push_back(eatCooldown / 30.0);
 
-    return input;
+    // NEW: Smell sensors (6 additional inputs)
+    // These provide long-range awareness for hunting
+
+    // Nearest RODENT (prey) - 3 inputs
+    NearestEntity nearestRodent = findNearestRodent(matrix);
+    if (nearestRodent.found) {
+        input.push_back(nearestRodent.dx / 20.0);       // Normalize to -1 to +1
+        input.push_back(nearestRodent.dy / 20.0);
+        input.push_back(nearestRodent.distance / 20.0); // Normalize to 0 to 1
+    } else {
+        input.push_back(0.0);  // No prey detected
+        input.push_back(0.0);
+        input.push_back(1.0);  // Max distance = no prey
+    }
+
+    // Nearest CAT peer (territorial avoidance) - 3 inputs
+    NearestEntity nearestCatPeer = findNearestCatPeer(matrix);
+    if (nearestCatPeer.found) {
+        input.push_back(nearestCatPeer.dx / 15.0);
+        input.push_back(nearestCatPeer.dy / 15.0);
+        input.push_back(nearestCatPeer.distance / 15.0);
+    } else {
+        input.push_back(0.0);
+        input.push_back(0.0);
+        input.push_back(1.0);  // No peer nearby
+    }
+
+    return input;  // Now 16 inputs (10 + 6)
+}
+
+NearestEntity Cat::findNearestRodent(TerminalMatrix& matrix, int search_radius) {
+    NearestEntity result;
+
+    // Search for rodents (prey)
+    for (int dy = -search_radius; dy <= search_radius; dy++) {
+        for (int dx = -search_radius; dx <= search_radius; dx++) {
+            if (dx == 0 && dy == 0) continue;  // Skip self
+
+            int checkX = getX() + dx;
+            int checkY = getY() + dy;
+
+            // Check bounds
+            if (checkX < 0 || checkX >= matrix.getWidth() ||
+                checkY < 0 || checkY >= matrix.getHeight()) {
+                continue;
+            }
+
+            Tile* tile = matrix.getTile(checkX, checkY);
+            if (tile && tile->hasActuator()) {
+                Actuator* act = tile->getActuator();
+                if (act && act->getType() == ActuatorType::RODENT) {
+                    Rodent* rodent = static_cast<Rodent*>(act);
+                    if (rodent->isAlive()) {
+                        int dist = std::abs(dx) + std::abs(dy);
+                        if (dist < result.distance) {
+                            result.distance = dist;
+                            result.dx = dx;
+                            result.dy = dy;
+                            result.found = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+NearestEntity Cat::findNearestCatPeer(TerminalMatrix& matrix, int search_radius) {
+    NearestEntity result;
+
+    // Search for other cats (territorial avoidance)
+    for (int dy = -search_radius; dy <= search_radius; dy++) {
+        for (int dx = -search_radius; dx <= search_radius; dx++) {
+            if (dx == 0 && dy == 0) continue;  // Skip self
+
+            int checkX = getX() + dx;
+            int checkY = getY() + dy;
+
+            // Check bounds
+            if (checkX < 0 || checkX >= matrix.getWidth() ||
+                checkY < 0 || checkY >= matrix.getHeight()) {
+                continue;
+            }
+
+            Tile* tile = matrix.getTile(checkX, checkY);
+            if (tile && tile->hasActuator()) {
+                Actuator* act = tile->getActuator();
+                if (act && act->getType() == ActuatorType::CAT && act != this) {
+                    int dist = std::abs(dx) + std::abs(dy);
+                    if (dist < result.distance) {
+                        result.distance = dist;
+                        result.dx = dx;
+                        result.dy = dy;
+                        result.found = true;
+                    }
+                }
+            }
+        }
+    }
+
+    return result;
 }
 
 void Cat::update(TerminalMatrix& matrix) {

@@ -2,6 +2,17 @@ CXX = g++
 CXXFLAGS = -std=c++17 -Wall -g -Icommon/include
 LDFLAGS = -lncurses
 
+# CUDA support (optional)
+# Build with: make ENABLE_CUDA=1
+ifdef ENABLE_CUDA
+    NVCC = nvcc
+    CUDA_ARCH ?= sm_75
+    CXXFLAGS += -DUSE_CUDA
+    CUDA_FLAGS = -std=c++17 -arch=$(CUDA_ARCH) -Icommon/include -DUSE_CUDA
+    LDFLAGS += -lcudart -L/usr/local/cuda/lib64
+    USE_CUDA = 1
+endif
+
 # Directories
 COMMON_SRC_DIR = common/src
 BUILD_DIR = build
@@ -13,13 +24,20 @@ COMMON_SOURCES = $(COMMON_SRC_DIR)/Menu.cpp \
                  $(COMMON_SRC_DIR)/TerminalMatrix.cpp \
                  $(COMMON_SRC_DIR)/Tile.cpp \
                  $(COMMON_SRC_DIR)/Actuator.cpp \
-                 $(COMMON_SRC_DIR)/Border.cpp
+                 $(COMMON_SRC_DIR)/Border.cpp \
+                 $(COMMON_SRC_DIR)/Simulation.cpp \
+                 $(COMMON_SRC_DIR)/Benchmark.cpp \
+                 $(COMMON_SRC_DIR)/ComputeBackend.cpp \
+                 $(COMMON_SRC_DIR)/CPUBackend.cpp \
+                 $(COMMON_SRC_DIR)/CUDABackend.cpp \
+                 $(COMMON_SRC_DIR)/ComputeConfig.cpp \
+                 $(COMMON_SRC_DIR)/NeuralNetwork.cpp
 
 OBJECTS = $(BUILD_DIR)/main.o
 COMMON_OBJECTS = $(COMMON_SOURCES:$(COMMON_SRC_DIR)/%.cpp=$(BUILD_DIR)/%.o)
 
 # Games
-GAMES = evolution city_scape
+GAMES = evolution city_scape snake
 
 all: $(BUILD_DIR) $(TARGET) games
 
@@ -51,4 +69,10 @@ clean:
 run: $(TARGET)
 	./$(TARGET)
 
-.PHONY: all clean run games
+test:
+	@echo "Running test suite..."
+	@$(MAKE) -C tests clean
+	@$(MAKE) -C tests
+	@$(MAKE) -C tests run
+
+.PHONY: all clean run games test

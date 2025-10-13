@@ -6,6 +6,7 @@
 // Forward declarations for game entry points
 int runEvolutionGame();
 int runCityScapeGame();
+int runSnakeGame();
 
 int main() {
     // Set locale for UTF-8 support BEFORE ncurses
@@ -27,7 +28,7 @@ int main() {
         Menu mainMenu("CURSED WORLD - Main Menu", "🌍");
         mainMenu.addOption("Evolution Simulation (Mice vs Cats)", "🧬");
         mainMenu.addOption("City Scape (Urban Navigation)", "🏙️");
-        mainMenu.addOption("Coming Soon: Sandbox Mode", "🎮");
+        mainMenu.addOption("Snake Game (Classic Gameplay)", "🐍");
         mainMenu.addOption("Exit", "🚪");
 
         int selection = mainMenu.show();
@@ -51,17 +52,8 @@ int main() {
                 break;
 
             case 2:
-                // Coming soon
-                endwin();
-                std::cout << "This feature is coming soon!\n";
-                std::cout << "Press Enter to return to menu...";
-                std::cin.get();
-                // Re-init ncurses
-                initscr();
-                cbreak();
-                noecho();
-                keypad(stdscr, TRUE);
-                curs_set(0);
+                // Launch snake game
+                runSnakeGame();
                 break;
 
             case 3:
@@ -116,6 +108,24 @@ int runCityScapeGame() {
 
     // Run the city scape game executable
     int result = system("cd games/city_scape && ./city_scape");
+
+    // Re-initialize ncurses before returning to menu
+    initscr();
+    cbreak();
+    noecho();
+    keypad(stdscr, TRUE);
+    curs_set(0);
+    clear();
+
+    return result;
+}
+
+int runSnakeGame() {
+    // Exit ncurses, run the game, then restart ncurses
+    endwin();
+
+    // Run the snake game executable
+    int result = system("cd games/snake && ./snake");
 
     // Re-initialize ncurses before returning to menu
     initscr();

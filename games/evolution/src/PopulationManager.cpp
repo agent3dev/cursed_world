@@ -1,4 +1,5 @@
 #include "../include/PopulationManager.h"
+#include "../../common/include/Benchmark.h"
 #include <random>
 #include <algorithm>
 #include <fstream>
@@ -20,8 +21,9 @@ static std::uniform_int_distribution<> safeYDist(const TerminalMatrix& matrix) {
     return std::uniform_int_distribution<>(1, max_y);
 }
 
-PopulationManager::PopulationManager(int maxPop, int genLength, int maxCatCount)
-    : generation(0), maxPopulation(maxPop), generationLength(genLength), currentTick(0), maxCats(maxCatCount), totalDeaths(0) {
+PopulationManager::PopulationManager(int maxPop, int genLength, int maxCatCount, const ComputeConfig* config)
+    : generation(0), maxPopulation(maxPop), generationLength(genLength), currentTick(0), maxCats(maxCatCount), totalDeaths(0),
+      use_batched_operations_(false) {
     // Initialize debug log
     debugLog.open("death_log.txt", std::ios::app);
     if (debugLog.is_open()) {
@@ -29,6 +31,45 @@ PopulationManager::PopulationManager(int maxPop, int genLength, int maxCatCount)
         auto time = std::chrono::system_clock::to_time_t(now);
         debugLog << "\n=== Simulation started: " << std::ctime(&time);
         debugLog << "Generation,Tick,MouseID,PosX,PosY,Energy,Age,FoodEaten,Cause\n";
+    }
+
+    // Initialize compute backend
+    BackendType backend_type = BackendType::AUTO;
+    bool fallback = true;
+
+    if (config) {
+        backend_type = config->selectBackend(maxPop);
+        fallback = config->isFallbackEnabled();
+        std::cout << "[PopulationManager] Using configuration-specified backend\n";
+        config->print();
+    } else {
+        std::cout << "[PopulationManager] No configuration provided, using AUTO backend\n";
+    }
+
+    compute_backend_ = createComputeBackend(backend_type, fallback);
+
+    if (!compute_backend_) {
+        std::cerr << "[PopulationManager] WARNING: Failed to create compute backend!\n";
+        std::cerr << "[PopulationManager] Falling back to direct method calls (no batching)\n";
+        use_batched_operations_ = false;
+    } else {
+        std::cout << "[PopulationManager] Using compute backend: " << compute_backend_->getName() << "\n";
+        use_batched_operations_ = true;  // Enable batched operations
+
+        // Reset stats
+        compute_backend_->resetStats();
+    }
+}
+
+void PopulationManager::setComputeBackend(std::unique_ptr<ComputeBackend> backend) {
+    if (backend) {
+        compute_backend_ = std::move(backend);
+        use_batched_operations_ = true;
+        std::cout << "[PopulationManager] Compute backend set to: " << compute_backend_->getName() << "\n";
+    } else {
+        compute_backend_.reset();
+        use_batched_operations_ = false;
+        std::cout << "[PopulationManager] Compute backend disabled\n";
     }
 }
 
@@ -129,20 +170,28 @@ void PopulationManager::manageCats(TerminalMatrix& matrix) {
 }
 
 void PopulationManager::update(TerminalMatrix& matrix) {
+    BENCHMARK_SCOPE("PopulationManager::update");
+
     currentTick++;
 
     // Update all cats first (predators move first)
-    for (auto& cat : cats) {
-        cat->update(matrix);
+    {
+        BENCHMARK_SCOPE("PopulationManager::update_cats");
+        for (auto& cat : cats) {
+            cat->update(matrix);
+        }
     }
 
     // Cats no longer reproduce mid-generation - they evolve between generations
     // This allows for proper fitness evaluation and selection pressure
 
     // Update all rodents
-    for (auto& rodent : population) {
-        if (rodent->isAlive()) {
-            rodent->update(matrix);
+    {
+        BENCHMARK_SCOPE("PopulationManager::update_rodents");
+        for (auto& rodent : population) {
+            if (rodent->isAlive()) {
+                rodent->update(matrix);
+            }
         }
     }
 
@@ -378,10 +427,15 @@ void PopulationManager::evolveCats(TerminalMatrix& matrix) {
 }
 
 void PopulationManager::evolveGeneration(TerminalMatrix& matrix) {
+    BENCHMARK_SCOPE("PopulationManager::evolveGeneration");
+
     generation++;
 
     // Evolve cats alongside rodents
-    evolveCats(matrix);
+    {
+        BENCHMARK_SCOPE("PopulationManager::evolveCats");
+        evolveCats(matrix);
+    }
 
     // Clear all tombstones and skulls from the map
     for (int y = 0; y < matrix.getHeight(); y++) {
@@ -399,10 +453,13 @@ void PopulationManager::evolveGeneration(TerminalMatrix& matrix) {
     }
 
     // Sort by fitness
-    std::sort(population.begin(), population.end(),
-        [](const std::unique_ptr<Rodent>& a, const std::unique_ptr<Rodent>& b) {
-            return a->getFitness() > b->getFitness();
-        });
+    {
+        BENCHMARK_SCOPE("PopulationManager::evolve_sort");
+        std::sort(population.begin(), population.end(),
+            [](const std::unique_ptr<Rodent>& a, const std::unique_ptr<Rodent>& b) {
+                return a->getFitness() > b->getFitness();
+            });
+    }
 
     // Keep top 20% as parents
     int parentsCount = std::max(2, static_cast<int>(population.size() * 0.2));
@@ -493,32 +550,35 @@ void PopulationManager::evolveGeneration(TerminalMatrix& matrix) {
 
     std::uniform_int_distribution<> parent_dist(0, population.size() - 1);
 
-    for (int i = 0; i < offspringCount && population.size() < static_cast<size_t>(maxPopulation); i++) {
-        int parentIdx = parent_dist(gen);
-        const std::vector<double>& parentWeights = parentWeightCache[parentIdx];
+    {
+        BENCHMARK_SCOPE("PopulationManager::evolve_create_offspring");
+        for (int i = 0; i < offspringCount && population.size() < static_cast<size_t>(maxPopulation); i++) {
+            int parentIdx = parent_dist(gen);
+            const std::vector<double>& parentWeights = parentWeightCache[parentIdx];
 
-        int x = x_dist(gen);
-        int y = y_dist(gen);
-        Tile* tile = matrix.getTile(x, y);
+            int x = x_dist(gen);
+            int y = y_dist(gen);
+            Tile* tile = matrix.getTile(x, y);
 
-        // Safety: max 100 tries to find empty tile
-        int attempts = 0;
-        while ((!tile || !tile->isWalkable() || tile->hasActuator()) && attempts < 100) {
-            x = x_dist(gen);
-            y = y_dist(gen);
-            tile = matrix.getTile(x, y);
-            attempts++;
+            // Safety: max 100 tries to find empty tile
+            int attempts = 0;
+            while ((!tile || !tile->isWalkable() || tile->hasActuator()) && attempts < 100) {
+                x = x_dist(gen);
+                y = y_dist(gen);
+                tile = matrix.getTile(x, y);
+                attempts++;
+            }
+
+            // If we couldn't find a spot, skip this offspring
+            if (!tile || !tile->isWalkable() || tile->hasActuator()) {
+                continue;
+            }
+
+            auto offspring = std::make_unique<Rodent>(x, y, "🐀", parentWeights);
+            offspring->getBrain().mutate(0.1, 0.5);  // 10% mutation rate
+            tile->setActuator(offspring.get());
+            population.push_back(std::move(offspring));
         }
-
-        // If we couldn't find a spot, skip this offspring
-        if (!tile || !tile->isWalkable() || tile->hasActuator()) {
-            continue;
-        }
-
-        auto offspring = std::make_unique<Rodent>(x, y, "🐀", parentWeights);
-        offspring->getBrain().mutate(0.1, 0.5);  // 10% mutation rate
-        tile->setActuator(offspring.get());
-        population.push_back(std::move(offspring));
     }
 }
 

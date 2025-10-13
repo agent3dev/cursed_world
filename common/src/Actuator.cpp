@@ -6,19 +6,19 @@ Actuator::Actuator(int posX, int posY, const std::string& c, ActuatorType t, boo
     : displayChar(c), x(posX), y(posY), type(t), blocking(block), colorPair(color) {
 }
 
-void Actuator::move(int dx, int dy, TerminalMatrix& matrix) {
+bool Actuator::move(int dx, int dy, TerminalMatrix& matrix) {
     int newX = x + dx;
     int newY = y + dy;
 
     // Check if new position is valid
     Tile* newTile = matrix.getTile(newX, newY);
     if (!newTile || !newTile->isWalkable()) {
-        return;  // Can't move there
+        return false;  // Can't move there
     }
 
     // If new tile has an actuator, can't move there
     if (newTile->hasActuator()) {
-        return;
+        return false;
     }
 
     // Clear current tile
@@ -31,4 +31,5 @@ void Actuator::move(int dx, int dy, TerminalMatrix& matrix) {
     x = newX;
     y = newY;
     newTile->setActuator(this);
+    return true;
 }

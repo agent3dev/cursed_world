@@ -8,6 +8,8 @@
 #include "Rodent.h"
 #include "Cat.h"
 #include "TerminalMatrix.h"
+#include "../../common/include/ComputeBackend.h"
+#include "../../common/include/ComputeConfig.h"
 
 class PopulationManager {
 private:
@@ -21,8 +23,16 @@ private:
     int totalDeaths;  // Track cumulative deaths
     std::ofstream debugLog;  // Debug log for death tracking
 
+    // Compute backend for CPU/GPU operations
+    std::unique_ptr<ComputeBackend> compute_backend_;
+    bool use_batched_operations_;  // Enable/disable batched processing
+
 public:
-    PopulationManager(int maxPop = 100, int genLength = 1000, int maxCatCount = 3);
+    PopulationManager(int maxPop = 100, int genLength = 1000, int maxCatCount = 3,
+                      const ComputeConfig* config = nullptr);
+
+    // Set compute backend (can be called after construction)
+    void setComputeBackend(std::unique_ptr<ComputeBackend> backend);
 
     // Initialize with random rodents (optional: clone from best weights)
     void initializePopulation(int count, TerminalMatrix& matrix, const std::vector<double>& bestWeights = {});

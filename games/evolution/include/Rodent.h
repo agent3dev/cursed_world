@@ -3,9 +3,18 @@
 
 #include <string>
 #include <vector>
-#include "TerminalMatrix.h"
+#include "../../common/include/TerminalMatrix.h"
 #include "NeuralNetwork.h"
-#include "Actuator.h"
+#include "../../common/include/Actuator.h"
+
+// Helper struct for distance-based sensing ("smell")
+struct NearestEntity {
+    int dx, dy;        // Direction vector to target
+    int distance;      // Manhattan distance
+    bool found;        // Whether any entity was found
+
+    NearestEntity() : dx(0), dy(0), distance(999999), found(false) {}
+};
 
 class Rodent : public Actuator {
 private:
@@ -20,6 +29,11 @@ private:
 
     // Encode surrounding tiles into neural network input
     std::vector<double> getSurroundingInfo(TerminalMatrix& matrix);
+
+    // Distance-based sensing ("smell") - find nearest entities
+    NearestEntity findNearestCat(TerminalMatrix& matrix, int search_radius = 20);
+    NearestEntity findNearestPeer(TerminalMatrix& matrix, int search_radius = 15);
+    NearestEntity findNearestFood(TerminalMatrix& matrix, int search_radius = 15);
 
 public:
     // Constructor with optional neural network weights
@@ -36,7 +50,7 @@ public:
     const NeuralNetwork& getBrain() const { return brain; }
 
     // Actions
-    void move(int dx, int dy, TerminalMatrix& matrix);
+    bool move(int dx, int dy, TerminalMatrix& matrix);
     void eat(TerminalMatrix& matrix);
     void poop(TerminalMatrix& matrix);  // Leave seed that will grow into seedling
     void update(TerminalMatrix& matrix);  // Main update logic (now uses neural network)

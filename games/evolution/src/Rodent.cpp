@@ -1,5 +1,6 @@
 #include "../include/Rodent.h"
-#include "../include/Actuator.h"
+#include "../include/Cat.h"
+#include "../../common/include/Actuator.h"
 #include <cmath>
 
 // Initialize static ID counter
@@ -7,7 +8,7 @@ int Rodent::nextId = 1;
 
 Rodent::Rodent(int posX, int posY, const char* c, const std::vector<double>& weights)
     : Actuator(posX, posY, c, ActuatorType::RODENT), energy(100.0), foodEaten(0), age(0), alive(true),
-      brain({9, 16, 9}), ticksSinceLastPoop(0), id(nextId++) {  // Input: 9 (8 tiles + energy), Hidden: 16, Output: 9 (8 directions + stay)
+      brain({17, 32, 9}), ticksSinceLastPoop(0), id(nextId++) {  // Input: 17 (8 tiles + energy + smell), Hidden: 32, Output: 9 (8 directions + stay)
 
     if (weights.empty()) {
         // No weights provided, randomize
@@ -59,16 +60,161 @@ std::vector<double> Rodent::getSurroundingInfo(TerminalMatrix& matrix) {
     // Add normalized energy level as 9th input (0-1 range, max energy = 150)
     info.push_back(energy / 150.0);
 
-    return info;  // 9 inputs
+    // NEW: Smell sensors (8 additional inputs)
+    // These provide long-range awareness beyond immediate neighbors
+
+    // Nearest CAT (predator) - 3 inputs
+    NearestEntity nearestCat = findNearestCat(matrix);
+    if (nearestCat.found) {
+        info.push_back(nearestCat.dx / 20.0);       // Normalize to -1 to +1
+        info.push_back(nearestCat.dy / 20.0);
+        info.push_back(nearestCat.distance / 20.0); // Normalize to 0 to 1
+    } else {
+        info.push_back(0.0);  // No cat detected
+        info.push_back(0.0);
+        info.push_back(1.0);  // Max distance = no threat
+    }
+
+    // Nearest RODENT peer (flocking behavior) - 3 inputs
+    NearestEntity nearestPeer = findNearestPeer(matrix);
+    if (nearestPeer.found) {
+        info.push_back(nearestPeer.dx / 15.0);
+        info.push_back(nearestPeer.dy / 15.0);
+        info.push_back(nearestPeer.distance / 15.0);
+    } else {
+        info.push_back(0.0);
+        info.push_back(0.0);
+        info.push_back(1.0);  // No peer nearby
+    }
+
+    // Nearest FOOD (seedlings) - 2 inputs (direction only, distance implicit)
+    NearestEntity nearestFood = findNearestFood(matrix);
+    if (nearestFood.found) {
+        info.push_back(nearestFood.dx / 15.0);
+        info.push_back(nearestFood.dy / 15.0);
+    } else {
+        info.push_back(0.0);
+        info.push_back(0.0);
+    }
+
+    return info;  // Now 17 inputs (9 + 8)
 }
 
-void Rodent::move(int dx, int dy, TerminalMatrix& matrix) {
+NearestEntity Rodent::findNearestCat(TerminalMatrix& matrix, int search_radius) {
+    NearestEntity result;
+
+    // Search in a square area around the rodent
+    for (int dy = -search_radius; dy <= search_radius; dy++) {
+        for (int dx = -search_radius; dx <= search_radius; dx++) {
+            if (dx == 0 && dy == 0) continue;  // Skip self
+
+            int checkX = getX() + dx;
+            int checkY = getY() + dy;
+
+            // Check bounds
+            if (checkX < 0 || checkX >= matrix.getWidth() ||
+                checkY < 0 || checkY >= matrix.getHeight()) {
+                continue;
+            }
+
+            Tile* tile = matrix.getTile(checkX, checkY);
+            if (tile && tile->hasActuator()) {
+                Actuator* act = tile->getActuator();
+                if (act && act->getType() == ActuatorType::CAT) {
+                    int dist = std::abs(dx) + std::abs(dy);  // Manhattan distance
+                    if (dist < result.distance) {
+                        result.distance = dist;
+                        result.dx = dx;
+                        result.dy = dy;
+                        result.found = true;
+                    }
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+NearestEntity Rodent::findNearestPeer(TerminalMatrix& matrix, int search_radius) {
+    NearestEntity result;
+
+    // Search for other rodents
+    for (int dy = -search_radius; dy <= search_radius; dy++) {
+        for (int dx = -search_radius; dx <= search_radius; dx++) {
+            if (dx == 0 && dy == 0) continue;  // Skip self
+
+            int checkX = getX() + dx;
+            int checkY = getY() + dy;
+
+            // Check bounds
+            if (checkX < 0 || checkX >= matrix.getWidth() ||
+                checkY < 0 || checkY >= matrix.getHeight()) {
+                continue;
+            }
+
+            Tile* tile = matrix.getTile(checkX, checkY);
+            if (tile && tile->hasActuator()) {
+                Actuator* act = tile->getActuator();
+                if (act && act->getType() == ActuatorType::RODENT && act != this) {
+                    Rodent* peer = static_cast<Rodent*>(act);
+                    if (peer->isAlive()) {
+                        int dist = std::abs(dx) + std::abs(dy);
+                        if (dist < result.distance) {
+                            result.distance = dist;
+                            result.dx = dx;
+                            result.dy = dy;
+                            result.found = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+NearestEntity Rodent::findNearestFood(TerminalMatrix& matrix, int search_radius) {
+    NearestEntity result;
+
+    // Search for edible tiles (seedlings)
+    for (int dy = -search_radius; dy <= search_radius; dy++) {
+        for (int dx = -search_radius; dx <= search_radius; dx++) {
+            if (dx == 0 && dy == 0) continue;  // Skip current tile
+
+            int checkX = getX() + dx;
+            int checkY = getY() + dy;
+
+            // Check bounds
+            if (checkX < 0 || checkX >= matrix.getWidth() ||
+                checkY < 0 || checkY >= matrix.getHeight()) {
+                continue;
+            }
+
+            Tile* tile = matrix.getTile(checkX, checkY);
+            if (tile && tile->isEdible()) {
+                int dist = std::abs(dx) + std::abs(dy);
+                if (dist < result.distance) {
+                    result.distance = dist;
+                    result.dx = dx;
+                    result.dy = dy;
+                    result.found = true;
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+bool Rodent::move(int dx, int dy, TerminalMatrix& matrix) {
     int newX = getX() + dx;
     int newY = getY() + dy;
 
     // Don't allow movement beyond screen bounds (no side walls, but also no offscreen)
     if (newX < 0 || newX >= matrix.getWidth() || newY < 0 || newY >= matrix.getHeight()) {
-        return;  // Can't move offscreen
+        return false;  // Can't move offscreen
     }
 
     // Check if new position is valid and walkable
@@ -81,7 +227,7 @@ void Rodent::move(int dx, int dy, TerminalMatrix& matrix) {
                 // Mouse walks into cat - instant death!
                 alive = false;
                 energy = 0.0;
-                return;
+                return false;
             }
         }
 
@@ -99,7 +245,9 @@ void Rodent::move(int dx, int dy, TerminalMatrix& matrix) {
         if (tile) {
             tile->setActuator(this);
         }
+        return true;
     }
+    return false;
 }
 
 void Rodent::eat(TerminalMatrix& matrix) {

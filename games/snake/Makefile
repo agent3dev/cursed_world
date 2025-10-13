@@ -7,7 +7,7 @@ INC_DIR = include
 BUILD_DIR = build
 COMMON_SRC_DIR = ../../common/src
 
-TARGET = city_scape
+TARGET = snake
 SOURCES = $(wildcard $(SRC_DIR)/*.cpp)
 COMMON_SOURCES = $(COMMON_SRC_DIR)/TerminalMatrix.cpp \
                  $(COMMON_SRC_DIR)/Tile.cpp \

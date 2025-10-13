@@ -50,7 +50,7 @@ public:
 
     // Virtual methods for derived classes
     virtual void update(TerminalMatrix& matrix) {}  // Override in derived classes
-    virtual void move(int dx, int dy, TerminalMatrix& matrix);  // Default move implementation
+    virtual bool move(int dx, int dy, TerminalMatrix& matrix);  // Default move implementation, returns success
 };
 
 #endif

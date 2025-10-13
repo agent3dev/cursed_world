@@ -1,0 +1,46 @@
+
+========================================
+         BENCHMARK REPORT
+========================================
+
+NeuralNetwork::forward:
+  Samples:  723
+  Average:  0.179 ms
+  Std Dev:  0.028 ms
+  Min:      0.047 ms
+  Max:      0.338 ms
+  Total:    0.130 s
+
+NeuralNetwork::mutate:
+  Samples:  10
+  Average:  1.222 ms
+  Std Dev:  0.288 ms
+  Min:      0.359 ms
+  Max:      1.342 ms
+  Total:    0.012 s
+
+PopulationManager::update:
+  Samples:  19
+  Average:  21.399 ms
+  Std Dev:  4.092 ms
+  Min:      6.283 ms
+  Max:      26.594 ms
+  Total:    0.407 s
+
+PopulationManager::update_cats:
+  Samples:  19
+  Average:  1.336 ms
+  Std Dev:  0.186 ms
+  Min:      0.701 ms
+  Max:      1.487 ms
+  Total:    0.025 s
+
+PopulationManager::update_rodents:
+  Samples:  19
+  Average:  19.093 ms
+  Std Dev:  3.736 ms
+  Min:      5.013 ms
+  Max:      22.506 ms
+  Total:    0.363 s
+
+========================================

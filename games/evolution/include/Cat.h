@@ -3,9 +3,10 @@
 
 #include <string>
 #include <vector>
-#include "TerminalMatrix.h"
+#include "../../common/include/TerminalMatrix.h"
 #include "NeuralNetwork.h"
-#include "Actuator.h"
+#include "../../common/include/Actuator.h"
+#include "Rodent.h"  // For NearestEntity struct
 
 class Cat : public Actuator {
 private:
@@ -24,6 +25,10 @@ private:
 
     // Encode surrounding tiles into neural network input
     std::vector<double> getSurroundingInfo(TerminalMatrix& matrix);
+
+    // Distance-based sensing ("smell") - find nearest entities
+    NearestEntity findNearestRodent(TerminalMatrix& matrix, int search_radius = 20);
+    NearestEntity findNearestCatPeer(TerminalMatrix& matrix, int search_radius = 15);
 
 public:
     // Constructor with optional neural network weights

@@ -13,30 +13,16 @@
 #include <algorithm>
 
 CityScapeSimulation::CityScapeSimulation()
-    : Simulation("City Scape"), matrix(nullptr), tickCount(0),
-      citizenCount(0), vehicleCount(0), paused(false) {
-}
-
-CityScapeSimulation::~CityScapeSimulation() {
-    cleanup();
+    : Simulation("City Scape - Urban Navigation Simulation", 150),  // 150ms frame delay
+      citizenCount(0), vehicleCount(0) {
 }
 
 void CityScapeSimulation::initialize() {
-    // Get screen dimensions
-    int max_y, max_x;
-    getmaxyx(stdscr, max_y, max_x);
+    // Call base class initialization (sets up matrix, calls initializeTerrain)
+    Simulation::initialize();
 
-    // Create terminal matrix with dashboard
-    matrix = std::make_unique<TerminalMatrix>(max_x / 2, max_y, 1);
-
-    // Initialize terrain
-    initializeTerrain();
-
-    // Set window title
-    matrix->setWindowTitle("City Scape - Urban Navigation Simulation");
-
-    // Initial stats
-    renderStats();
+    // No additional game-specific initialization needed
+    // (terrain initialization is done in initializeTerrain())
 }
 
 void CityScapeSimulation::initializeTerrain() {
@@ -270,86 +256,21 @@ void CityScapeSimulation::updateEntities() {
             }
         }
     }
-
-    tickCount++;
 }
 
-void CityScapeSimulation::handleInput(int ch) {
-    if (ch == ' ') {
-        paused = !paused;
-    } else if (ch == 't' || ch == 'T') {
-        bool current = matrix->getTypeView();
-        matrix->setTypeView(!current);
-        clear();
-        matrix->render();
-    }
+void CityScapeSimulation::handleGameInput(int ch) {
+    // No game-specific input handling needed for city scape yet
+    // (Common inputs like pause, type toggle, quit are handled by base class)
 }
 
 void CityScapeSimulation::renderStats() {
     if (!matrix) return;
 
     std::stringstream ss;
-    ss << "Tick: " << tickCount
+    ss << "Tick: " << tickCount  // Use base class tickCount
        << " | Citizens: " << citizenCount
        << " | Vehicles: " << vehicleCount
-       << " | " << (paused ? "[PAUSED]" : "[RUNNING]");
+       << " | " << (paused ? "[PAUSED]" : "[RUNNING]");  // Use base class paused
 
     matrix->setDashboard(ss.str());
-}
-
-int CityScapeSimulation::run() {
-    // Initialize ncurses
-    initscr();
-    cbreak();
-    noecho();
-    keypad(stdscr, TRUE);
-    curs_set(0);
-    clear();
-
-    // Initialize simulation
-    initialize();
-    isRunning = true;
-
-    // Render initial state
-    matrix->render();
-
-    // Set non-blocking input
-    nodelay(stdscr, TRUE);
-
-    // Main loop
-    int ch;
-    while (isRunning) {
-        ch = getch();
-
-        if (ch == 'q' || ch == 27) {  // q or ESC
-            break;
-        }
-
-        handleInput(ch);
-
-        // Update simulation if not paused
-        if (!paused) {
-            updateEntities();
-            renderStats();
-            matrix->render();
-            napms(150);  // Slower update rate for city
-        } else {
-            napms(50);
-        }
-    }
-
-    cleanup();
-    return 0;
-}
-
-void CityScapeSimulation::cleanup() {
-    if (matrix) {
-        matrix.reset();
-    }
-    endwin();
-
-    // Clear the terminal screen before exiting (for seamless menu return)
-    std::cout << "\033[2J\033[H";  // ANSI escape codes to clear screen and move cursor to home
-
-    isRunning = false;
 }

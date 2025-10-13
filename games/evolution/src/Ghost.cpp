@@ -1,17 +1,17 @@
 #include "../include/Ghost.h"
 #include "../include/Rodent.h"
-#include "../include/Actuator.h"
+#include "../../common/include/Actuator.h"
 
 Ghost::Ghost(int posX, int posY, const char* c)
     : Actuator(posX, posY, c, ActuatorType::CHARACTER) {}
 
-void Ghost::move(int dx, int dy, TerminalMatrix& matrix) {
+bool Ghost::move(int dx, int dy, TerminalMatrix& matrix) {
     int newX = getX() + dx;
     int newY = getY() + dy;
 
     // Don't allow movement beyond screen bounds
     if (newX < 0 || newX >= matrix.getWidth() || newY < 0 || newY >= matrix.getHeight()) {
-        return;  // Can't move offscreen
+        return false;  // Can't move offscreen
     }
 
     // Ghost can move through everything (like cats over obstacles)
@@ -34,7 +34,9 @@ void Ghost::move(int dx, int dy, TerminalMatrix& matrix) {
             // For now, just update position without setting actuator
             // The ghost will appear to float over the other entity
         }
+        return true;
     }
+    return false;
 }
 
 void Ghost::killNearbyMice(TerminalMatrix& matrix) {

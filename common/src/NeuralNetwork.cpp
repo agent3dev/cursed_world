@@ -1,4 +1,5 @@
 #include "../include/NeuralNetwork.h"
+#include "../../common/include/Benchmark.h"
 #include <fstream>
 #include <iostream>
 
@@ -138,6 +139,8 @@ int NeuralNetwork::getWeightCount() const {
 }
 
 std::vector<double> NeuralNetwork::forward(const std::vector<double>& input) {
+    BENCHMARK_SCOPE("NeuralNetwork::forward");
+
     std::vector<double> current = input;
 
     // Propagate through each layer
@@ -175,6 +178,8 @@ std::vector<double> NeuralNetwork::forward(const std::vector<double>& input) {
 }
 
 void NeuralNetwork::mutate(double mutation_rate, double mutation_amount) {
+    BENCHMARK_SCOPE("NeuralNetwork::mutate");
+
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<> prob(0.0, 1.0);
