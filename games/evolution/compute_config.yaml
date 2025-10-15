@@ -1,0 +1,11 @@
+# Compute Backend Configuration for Evolution Game
+# This file is loaded automatically when the game starts
+
+# Backend options: auto, cpu, cuda
+backend: cuda
+
+# Fallback to CPU if CUDA initialization fails
+fallback_to_cpu: true
+
+# Auto mode threshold: switch to GPU when population >= this value
+auto_threshold: 20

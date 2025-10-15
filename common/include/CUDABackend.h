@@ -32,11 +32,34 @@ private:
     int device_id_;
     cudaDeviceProp device_properties_;
 
-    // GPU memory buffers (to be implemented)
-    void* d_weights_;
-    void* d_inputs_;
-    void* d_outputs_;
+    // GPU memory buffers
+    double* d_inputs_;
+    double* d_outputs_;
+    double* d_weights1_;  // Layer 1 weights
+    double* d_biases1_;   // Layer 1 biases
+    double* d_weights2_;  // Layer 2 weights
+    double* d_biases2_;   // Layer 2 biases
+    double* d_recurrent_; // Recurrent weights
+    double* d_hidden_state_; // Previous hidden state
+    double* d_hidden_output_; // New hidden state
+
+    // For distance search
+    int* d_agent_x_;
+    int* d_agent_y_;
+    int* d_target_x_;
+    int* d_target_y_;
+    int* d_result_dx_;
+    int* d_result_dy_;
+    int* d_result_distance_;
+    int* d_result_found_;
+
+    // For mutation
+    double* d_weights_all_;
+    double* d_random_prob_;
+    double* d_random_amount_;
+
     size_t allocated_size_;
+    size_t max_batch_size_;  // Maximum batch size allocated for
 
     // Performance tracking
     double total_time_ms_;

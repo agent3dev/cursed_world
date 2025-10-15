@@ -112,12 +112,12 @@ void EvolutionSimulation::initialize() {
     // Call base class initialization (sets up ncurses, matrix, calls initializeTerrain)
     Simulation::initialize();
 
-    // Initialize population manager with compute configuration
-    popManager = std::make_unique<PopulationManager>(50, 2000, 3, computeConfig.get());  // Max 50 rodents, 2000 ticks per generation, 3 cats
+    // Initialize population manager with compute configuration (OVERPOPULATION MODE)
+    popManager = std::make_unique<PopulationManager>(50, 1500, 5, computeConfig.get());  // Max 50 rodents, 1500 ticks/gen (faster evolution), 5 cats
 
-    // Use the brain weights loaded earlier
-    popManager->initializePopulation(30, *matrix, bestMouseWeights);  // Start with 30 rodents
-    popManager->initializeCats(3, *matrix, bestCatWeights);  // Start with 3 cats
+    // Use the brain weights loaded earlier (START OVERPOPULATED)
+    popManager->initializePopulation(45, *matrix, bestMouseWeights);  // Start with 45 rodents (near max capacity!)
+    popManager->initializeCats(5, *matrix, bestCatWeights);  // Start with 5 cats (increased predation pressure)
 
     // Create player-controlled ghost in the center
     int ghostX = matrix->getWidth() / 2;

@@ -5,12 +5,15 @@ LDFLAGS = -lncurses
 # CUDA support (optional)
 # Build with: make ENABLE_CUDA=1
 ifdef ENABLE_CUDA
-    NVCC = nvcc
+    NVCC = /opt/cuda/bin/nvcc
     CUDA_ARCH ?= sm_75
-    CXXFLAGS += -DUSE_CUDA
+    CXXFLAGS += -DUSE_CUDA -I/opt/cuda/include
     CUDA_FLAGS = -std=c++17 -arch=$(CUDA_ARCH) -Icommon/include -DUSE_CUDA
-    LDFLAGS += -lcudart -L/usr/local/cuda/lib64
+    # Arch Linux uses /opt/cuda/, Ubuntu uses /usr/local/cuda/
+    LDFLAGS += -lcudart -L/opt/cuda/lib64
     USE_CUDA = 1
+    CUDA_SOURCES = $(COMMON_SRC_DIR)/CUDABackend.cu
+    CUDA_OBJECTS = $(CUDA_SOURCES:$(COMMON_SRC_DIR)/%.cu=$(BUILD_DIR)/%_kernels.o)
 endif
 
 # Directories
@@ -44,8 +47,8 @@ all: $(BUILD_DIR) $(TARGET) games
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-$(TARGET): $(OBJECTS) $(COMMON_OBJECTS)
-	$(CXX) $(OBJECTS) $(COMMON_OBJECTS) -o $(TARGET) $(LDFLAGS)
+$(TARGET): $(OBJECTS) $(COMMON_OBJECTS) $(CUDA_OBJECTS)
+	$(CXX) $(OBJECTS) $(COMMON_OBJECTS) $(CUDA_OBJECTS) -o $(TARGET) $(LDFLAGS)
 
 $(BUILD_DIR)/main.o: $(MAIN_SOURCE)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
@@ -53,10 +56,13 @@ $(BUILD_DIR)/main.o: $(MAIN_SOURCE)
 $(BUILD_DIR)/%.o: $(COMMON_SRC_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/%_kernels.o: $(COMMON_SRC_DIR)/%.cu
+	$(NVCC) $(CUDA_FLAGS) -c $< -o $@
+
 games:
 	@for game in $(GAMES); do \
 		echo "Building $$game..."; \
-		$(MAKE) -C games/$$game || exit 1; \
+		$(MAKE) -C games/$$game $(if $(USE_CUDA),USE_CUDA=1 CUDA_INCLUDE=-I/opt/cuda/include) || exit 1; \
 	done
 
 clean:

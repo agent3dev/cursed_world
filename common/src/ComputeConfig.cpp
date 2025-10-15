@@ -8,7 +8,7 @@
 ComputeConfig::ComputeConfig()
     : preferred_backend_(BackendType::AUTO),
       fallback_to_cpu_(true),
-      auto_threshold_(100),  // Switch to GPU at 100+ agents
+      auto_threshold_(20),  // Switch to GPU at 20+ agents
       config_file_path_("") {
 }
 

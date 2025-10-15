@@ -55,6 +55,15 @@ public:
     // Save/load weights to/from file
     bool saveToFile(const std::string& filename) const;
     bool loadFromFile(const std::string& filename);
+
+    // Getters for GPU backend (const access to internal structures)
+    const std::vector<std::vector<double>>& getWeights1() const { return weights[0]; }
+    const std::vector<double>& getBiases1() const { return biases[0]; }
+    const std::vector<std::vector<double>>& getWeights2() const { return weights[1]; }
+    const std::vector<double>& getBiases2() const { return biases[1]; }
+    const std::vector<std::vector<double>>& getRecurrentWeights() const { return recurrent_weights; }
+    const std::vector<double>& getHiddenState() const { return hidden_state; }
+    void setHiddenState(const std::vector<double>& new_state) { hidden_state = new_state; }
 };
 
 #endif

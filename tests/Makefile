@@ -17,10 +17,12 @@ TEST_SOURCES = test_tile.cpp \
 COMMON_SOURCES = $(COMMON_SRC_DIR)/Tile.cpp \
                  $(COMMON_SRC_DIR)/Actuator.cpp \
                  $(COMMON_SRC_DIR)/TerminalMatrix.cpp \
-                 $(COMMON_SRC_DIR)/Border.cpp
+                 $(COMMON_SRC_DIR)/Border.cpp \
+                 $(COMMON_SRC_DIR)/Benchmark.cpp \
+                 $(COMMON_SRC_DIR)/NeuralNetwork.cpp
 
 # Evolution sources needed for tests
-EVOLUTION_SOURCES = $(EVOLUTION_SRC_DIR)/NeuralNetwork.cpp
+EVOLUTION_SOURCES =
 
 # Object files
 TEST_OBJECTS = $(TEST_SOURCES:%.cpp=$(BUILD_DIR)/%.o)

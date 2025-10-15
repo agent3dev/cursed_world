@@ -88,8 +88,8 @@ int runEvolutionGame() {
     // Exit ncurses, run the game, then restart ncurses
     endwin();
 
-    // Run the evolution game executable
-    int result = system("cd games/evolution && ./evolution");
+    // Run the evolution game executable with CUDA backend
+    int result = system("cd games/evolution && ./evolution --backend=cuda");
 
     // Re-initialize ncurses before returning to menu
     initscr();

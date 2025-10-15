@@ -1,6 +1,11 @@
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -g -Iinclude -I../../common/include
+CXXFLAGS = -std=c++17 -Wall -g -Iinclude -I../../common/include $(CUDA_INCLUDE)
 LDFLAGS = -lncurses
+
+# CUDA support (optional)
+ifdef USE_CUDA
+    CXXFLAGS += -DUSE_CUDA
+endif
 
 SRC_DIR = src
 INC_DIR = include
